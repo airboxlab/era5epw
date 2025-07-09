@@ -1,0 +1,115 @@
+import glob
+import logging
+import os
+import os.path
+import random
+import time
+import zipfile
+from calendar import monthrange
+
+import cdsapi
+import pandas as pd
+import xarray as xr
+
+_api_key = None
+
+
+def load_api_key() -> str:
+    """Load the CDS API key from environment variable or from the ~/.cdsapirc file."""
+    global _api_key
+    if _api_key is not None:
+        return _api_key
+
+    if os.getenv("CDSADS_API_KEY"):
+        _api_key = os.getenv("CDSADS_API_KEY")
+        return _api_key
+
+    try:
+        with open(os.path.expanduser("~/.cdsapirc")) as file:
+            api_key = file.readlines()[-1].split(":")[-1].strip()
+            assert api_key, "CDS API key is empty. Please check your ~/.cdsapirc file."
+            _api_key = api_key
+            return _api_key
+    except FileNotFoundError:
+        raise FileNotFoundError(
+            "CDS API key file not found. Please create '~/.cdsapirc' with your key."
+        )
+
+
+def make_cds_days_list(year, month):
+    """Generate a list of days for a given year and month."""
+
+    days_in_month = monthrange(year, month)[1]
+    return [f"{day:02d}" for day in range(1, days_in_month + 1)]
+
+
+def execute_download_request(url, dataset, cds_request, target_file):
+    """Execute a CDS request and download the data to the target file."""
+    client = cdsapi.Client(url=url, key=load_api_key())
+    # wait for a random time between 0 and 10 seconds to avoid hitting the CDS API too hard
+    time.sleep(random.uniform(0, 10))
+    # Execute the CDS request
+    logging.debug(f"Executing CDS request for dataset '{dataset}' with parameters: {cds_request}")
+    client.retrieve(dataset, cds_request).download(target=target_file)
+
+
+def load_netcdf(file_path) -> xr.Dataset:
+    """Load a NetCDF file and return its content.
+
+    :param file_path: Path to the NetCDF file.
+    :return: xarray.Dataset containing the data from the NetCDF file.
+    """
+    ds = xr.open_dataset(file_path, engine="netcdf4")  # type: ignore[call-arg]
+
+    return ds
+
+
+def unzip_and_load_netcdf_to_df(file_path: str, clean_up: bool) -> pd.DataFrame:
+    """Unzip a zip file containing a NetCDF file and load it into a DataFrame.
+
+    :param file_path: Path to the zip file.
+    :param clean_up: If True, remove the temporary NetCDF file after processing.
+    :return: A DataFrame containing the data from the NetCDF file.
+    """
+
+    if zipfile.is_zipfile(file_path):
+        with zipfile.ZipFile(file_path, "r") as zip_ref:
+            nc_file = zip_ref.namelist()[0]
+            zip_ref.extractall("/tmp")
+
+        tmp_file_path = os.path.join("/tmp", nc_file)
+        try:
+            return concat_netcdf_files_to_df(tmp_file_path, time_dim=0)
+        finally:
+            if clean_up:
+                os.remove(tmp_file_path)
+
+    else:
+        # If the file is not a zip, assume it's a NetCDF file
+        return concat_netcdf_files_to_df(file_path, time_dim=0)
+
+
+def concat_netcdf_files_to_df(file_paths, time_dim: int = 0) -> pd.DataFrame:
+    """Concatenate multiple NetCDF files into a single DataFrame.
+
+    The index of the DataFrame will be a datetime index based on the 'time' dimension
+
+    :param file_paths: List of paths to NetCDF files to merge.
+    :param time_dim: The dimension to use for the time index. Default is 0 (first
+        dimension).
+    :return: xarray.Dataset containing the merged data.
+    """
+    files = glob.glob(file_paths)
+    assert files, f"No NetCDF files found matching pattern: {file_paths}"
+    datasets = []
+    for file in files:
+        try:
+            df = xr.open_dataset(file).to_dataframe()
+        except Exception as e:
+            raise ValueError(f"Failed to read file {file}: {e}")
+        # convert index to datetime by keeping the first level (time)
+        df.index = pd.to_datetime(df.index.get_level_values(time_dim))
+        datasets.append(df)
+
+    combined_ds = pd.concat(datasets, axis=0).sort_index()
+    return combined_ds

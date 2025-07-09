@@ -1,0 +1,32 @@
+[tool.poetry]
+name = "era5-epw"
+version = "0.1.0"
+description = "A tool to convert ERA5/ECMWF data to EnergyPlus Weather (EPW) format"
+authors = ["Antoine Galataud <antoine@foobot.io>"]
+packages = [
+    { include = "era5epw" },
+]
+
+[[tool.poetry.source]]
+name = "PyPI"
+priority = "primary"
+
+[tool.poetry.dependencies]
+python = "~3.12"
+numpy = "1.26.4"
+pandas = "2.2.3"
+xarray = "2025.7.0"
+cdsapi = "0.7.6"
+netcdf4 = "1.7.2"
+# earthkit-data = "0.15.0"
+# ecmwf-opendata = "0.3.20"
+# xarray-ecmwf = { git = "https://github.com/bopen/xarray-ecmwf.git", branch = "main" }
+# dask = "2025.5.1"
+# zarr = "3.0.10"
+
+[tool.poetry.scripts]
+tests = "tests.discover:run"
+
+[build-system]
+requires = ["setuptools", "poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
