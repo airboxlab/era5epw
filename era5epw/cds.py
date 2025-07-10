@@ -234,6 +234,3 @@ if __name__ == "__main__":
 
     print(df.head(5))
     print(df.info())
-
-    stl1 = df["stl1"].groupby(df["stl1"].index.month).mean() - 273.15
-    print(",".join(stl1.round(1).astype(str).tolist()))

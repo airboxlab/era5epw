@@ -45,7 +45,8 @@ poetry run python era5epw/main.py --year 2024 --latitude 49.4 --longitude 0.1 --
 
 Datasets home pages:
 
-- Experimental: [ERA5 hourly time-series data on single levels from 1940 to present](https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels-timeseries)
+- [ERA5 hourly time-series data on single levels from 1940 to present](https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels-timeseries) (Experimental)
+- [ERA5 Land hourly time-series data from 1950 to present](https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land-timeseries) (Experimental)
 - [ERA5 hourly data on single levels from 1940 to present](https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels)
 - [CAMS solar radiation time-series](https://ads.atmosphere.copernicus.eu/datasets/cams-solar-radiation-timeseries)
 
