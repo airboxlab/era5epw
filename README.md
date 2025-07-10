@@ -22,6 +22,8 @@ key: <your_api_key>
 Note: the URL will be dynamically managed by the script depending on the data source.
 The API key doesn't vary, it's the same for both ERA5 and CAMS data.
 
+Moreover, before proceeding, it is required to accept all the licenses in the section "Your profile" in the website of [Copernicus](https://cds.climate.copernicus.eu/profile?tab=licences).
+
 Install the required dependencies using [Poetry](https://python-poetry.org/):
 
 ```bash
