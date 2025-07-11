@@ -1,3 +1,4 @@
+import datetime
 import glob
 import logging
 import os
@@ -36,11 +37,34 @@ def load_api_key() -> str:
         )
 
 
-def make_cds_days_list(year, month):
-    """Generate a list of days for a given year and month."""
+def now_utc() -> datetime.datetime:
+    """Get the current UTC time."""
+    return datetime.datetime.now(datetime.UTC)
+
+
+def make_cds_days_list(year, month) -> list[str]:
+    """Generate a list of days for a given year and month.
+
+    In case the month is in the future, return an empty list.
+
+    :param year: The year for which to generate the days.
+    :param month: The month for which to generate the days.
+    :return: A list of days in the format 'DD' for the specified month and year.
+    """
+
+    now = now_utc()
+    current_year, current_month, current_day = now.year, now.month, now.day
+
+    if (current_year, current_month) < (year, month):
+        return []
 
     days_in_month = monthrange(year, month)[1]
-    return [f"{day:02d}" for day in range(1, days_in_month + 1)]
+
+    if (current_year, current_month) == (year, month):
+        return [f"{day:02d}" for day in range(1, min(days_in_month, current_day) + 1)]
+
+    else:
+        return [f"{day:02d}" for day in range(1, days_in_month + 1)]
 
 
 def execute_download_request(url, dataset, cds_request, target_file):
