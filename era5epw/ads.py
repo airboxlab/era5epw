@@ -4,10 +4,47 @@ import tempfile
 import pandas as pd
 import xarray as xr
 
-from era5epw.utils import execute_download_request
+from era5epw.utils import execute_download_request, now_utc
 
 url = "https://ads.atmosphere.copernicus.eu/api"
 dataset = "cams-solar-radiation-timeseries"
+
+
+def make_cams_solar_radiation_request(
+    longitude: float,
+    latitude: float,
+    year: int,
+    sky_type: str = "observed_cloud",
+    altitude: list[str] | None = None,
+    time_step: str = "1hour",
+    time_reference: str = "universal_time",
+) -> dict[str, any] | None:
+    assert sky_type in [
+        "clear",
+        "observed_cloud",
+    ], "Invalid sky type. Choose 'clear' or 'observed_cloud'."
+
+    if altitude is None:
+        altitude = ["0"]  # Default altitude if not specified
+
+    now = now_utc()
+    if year > now.year:
+        return None  # Do not allow requests for future years
+
+    end_day = f"{year}-12-31"
+    today = now.strftime("%Y-%m-%d")
+    if end_day > today:
+        end_day = today
+
+    return {
+        "sky_type": sky_type,
+        "location": {"longitude": longitude, "latitude": latitude},
+        "altitude": altitude,
+        "date": [f"{year}-01-01/{end_day}"],
+        "time_step": time_step,
+        "time_reference": time_reference,
+        "format": "netcdf",
+    }
 
 
 def download_cams_solar_radiation_data(
@@ -31,23 +68,18 @@ def download_cams_solar_radiation_data(
     :param time_reference: Time reference for the data, default is "universal_time".
     :param clean_up: If True, remove the temporary file after processing.
     """
-    assert sky_type in [
-        "clear",
-        "observed_cloud",
-    ], "Invalid sky type. Choose 'clear' or 'observed_cloud'."
+    request = make_cams_solar_radiation_request(
+        longitude=longitude,
+        latitude=latitude,
+        year=year,
+        sky_type=sky_type,
+        altitude=altitude,
+        time_step=time_step,
+        time_reference=time_reference,
+    )
 
-    if altitude is None:
-        altitude = ["0"]  # Default altitude if not specified
-
-    request = {
-        "sky_type": sky_type,
-        "location": {"longitude": longitude, "latitude": latitude},
-        "altitude": altitude,
-        "date": [f"{year}-01-01/{year}-12-31"],
-        "time_step": time_step,
-        "time_reference": time_reference,
-        "format": "netcdf",
-    }
+    if request is None:
+        raise ValueError("Cannot download data for future years.")
 
     with tempfile.NamedTemporaryFile(dir="/tmp", suffix=".nc", delete=clean_up) as temp_file:
         execute_download_request(

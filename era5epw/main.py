@@ -127,16 +127,17 @@ def download_and_make_epw(
         year=year,
     )
 
-    # CAMS data has a 1-hour shift compared to ERA5, so we need to align them
+    # CAMS data has a (tz?) shift compared to ERA5, so we need to align them
     # interpolate first hour of the year with the first hour of CAMS
-    cams_df = cams_df.reindex(
-        pd.date_range(start=f"{year}-01-01 00:00", end=f"{year}-12-31 23:00", freq="1h"),
-        method="bfill",
-    )
+    if cams_df.index[0] != pd.Timestamp(f"{year}-01-01 00:00"):
+        cams_df = cams_df.reindex(
+            pd.date_range(start=f"{year}-01-01 00:00", end=cams_df.index[-1], freq="1h"),
+            method="bfill",
+        )
 
-    assert len(era5_df) == len(
-        cams_df
-    ), "Mismatch in number of time steps between ERA5 and CAMS data"
+    # Align ERA5 and CAMS dataframes to the same time range
+    # their indices may not match exactly, especially when the year is not complete (e.g. current year)
+    era5_df, cams_df = era5_df.align(cams_df, join="inner", axis=0)
     assert era5_df.index.equals(cams_df.index), "Time indices of ERA5 and CAMS data do not match"
 
     # Extract variables, convert to correct units

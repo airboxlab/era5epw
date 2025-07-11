@@ -1,7 +1,6 @@
 import logging
 import os
 import tempfile
-from calendar import monthrange
 from multiprocessing import Pool
 from tempfile import TemporaryDirectory
 
@@ -10,6 +9,7 @@ import pandas as pd
 from era5epw.utils import (
     execute_download_request,
     make_cds_days_list,
+    now_utc,
     unzip_and_load_netcdf_to_df,
 )
 
@@ -46,7 +46,7 @@ def make_cds_request(
     month: int | None,
     latitude: float,
     longitude: float,
-) -> dict[str, any]:
+) -> dict[str, any] | None:
     """Create a CDS request for the specified parameters.
 
     :param ds: The dataset to use, e.g., 'reanalysis-era5-single-levels-timeseries'.
@@ -55,14 +55,28 @@ def make_cds_request(
     :param month: The month of the data. If None, all months will be requested.
     :param latitude: The latitude for the data point.
     :param longitude: The longitude for the data point.
-    :return: A dictionary representing the CDS request.
+    :return: A dictionary representing the CDS request if the request is valid, otherwise
+        None.
     """
 
+    now = now_utc()
+
+    # compute the start and end months based on the current date
+    if year > now.year:
+        return None
+    if month is None:
+        month_start = 1
+        month_end = 12 if year < now.year else now.month
+    else:
+        if (now.year, now.month) < (year, month):
+            return None
+        month_start = month_end = month
+
+    # dynamic dataset selection based on variables
     if ds is None:
         assert (
             len(variables) == 1
         ), "Dataset dynamic selection only supports single variable requests."
-        # if no dataset is specified, we select the first one that supports the variable
         for dataset in datasets:
             if variables[0] in supported_vars_by_dataset[dataset] or supported_vars_by_dataset[
                 dataset
@@ -70,23 +84,16 @@ def make_cds_request(
                 ds = dataset
                 break
 
-    if month is None:
-        month_start = 1
-        month_end = 12
-    else:
-        month_start = month_end = month
-
     if ds in [
         "reanalysis-era5-single-levels-timeseries",
         "reanalysis-era5-land-timeseries",
     ]:
+        last_day_of_month_end = make_cds_days_list(year, month_end)[-1]
         return {
             "dataset": ds,
             "data_format": "netcdf",
             "variable": variables,
-            "date": [
-                f"{year}-{month_start:02d}-01/{year}-{month_end:02d}-{monthrange(year, month_end)[1]:02d}"
-            ],
+            "date": [f"{year}-{month_start:02d}-01/{year}-{month_end:02d}-{last_day_of_month_end}"],
             "location": {"longitude": longitude, "latitude": latitude},
         }
     elif ds == "reanalysis-era5-single-levels":
@@ -108,6 +115,47 @@ def make_cds_request(
         raise ValueError(
             f"Unsupported dataset: {ds}. Supported datasets are 'reanalysis-era5-single-levels-timeseries' and 'reanalysis-era5-single-levels'."
         )
+
+
+def make_intermediate_file_names(
+    tmpdir: str, year: int, cds_requests: list[dict[str, any]]
+) -> list[str]:
+    """Generate a list of temporary file names for storing intermediate results of CDS requests.
+
+    :param tmpdir: Temporary directory where intermediate files will be stored.
+    :param year: The year for which the data is requested.
+    :param cds_requests: List of CDS requests that will be executed.
+    :return: List of temporary file names.
+    """
+    # timeseries dataset requests have a 'date' field, while single-level requests have 'month'
+    # here we assume that requests are ordered, and the last request contains the latest date or month
+    last_request = cds_requests[-1]
+    if "date" in last_request:
+        # timeseries date format is 'YYYY-MM-DD/YYYY-MM-DD'
+        _, date_end = last_request["date"][0].split("/")
+        month_end = int(date_end.split("-")[1])
+        requested_months = [f"{m:02d}" for m in range(1, month_end + 1)]
+    else:
+        requested_months = [f"{m:02d}" for m in range(1, last_request["month"][0] + 1)]
+
+    # extract the variable names from all CDS requests
+    # not using a set to preserve the order of variables
+    variables = []
+    for cds_request in cds_requests:
+        if "variable" in cds_request:
+            for var in cds_request["variable"]:
+                if var not in variables:
+                    variables.append(var)
+        else:
+            raise ValueError("CDS request must contain 'variable' or 'variables' field.")
+
+    intermediate_files = [
+        os.path.join(tmpdir, f"era5_{year}_{month}_{var}.nc")
+        for month in requested_months
+        for var in variables
+    ]
+
+    return intermediate_files
 
 
 def download_era5_data(
@@ -163,18 +211,25 @@ def download_era5_data(
                 latitude=latitude,
                 longitude=longitude,
             )
-            cds_requests.append(cds_request)
+            if cds_request is not None:
+                cds_requests.append(cds_request)
+
+    if len(cds_requests) == 0:
+        raise ValueError(
+            f"No valid CDS requests could be created for year {year} and variables {variables}."
+        )
 
     logging.info(f"Running {len(cds_requests)} requests in parallel for {year}...")
 
     # make temporary directory for intermediate files
     # then download each month in parallel
     with TemporaryDirectory(delete=clean_up) as tmpdir:
-        intermediate_files = [
-            os.path.join(tmpdir, f"era5_{year}_{month:02d}_{var}.nc")
-            for month in range(1, 13)
-            for var in variables
-        ]
+        intermediate_files = make_intermediate_file_names(tmpdir, year, cds_requests)
+
+        assert len(cds_requests) == len(intermediate_files), (
+            "The number of CDS requests and intermediate files must match."
+            f" {len(cds_requests)} requests, {len(intermediate_files)} files."
+        )
 
         with Pool(parallel_exec_nb) as pool:
             _result = pool.starmap(
@@ -201,7 +256,11 @@ def download_era5_data(
             dfs_by_month[df.index.month[0]].append(df)
 
         # concatenate variables for each month
-        dfs = [pd.concat(month_dfs, axis=1) for month_dfs in dfs_by_month.values()]
+        dfs = [
+            pd.concat(month_dfs, axis=1)
+            for month_dfs in dfs_by_month.values()
+            if len(month_dfs) > 0
+        ]
 
         # concatenate along the index (time) axis
         return pd.concat(dfs, axis=0, ignore_index=False)
@@ -222,7 +281,7 @@ if __name__ == "__main__":
             "total_precipitation",
             "soil_temperature_level_1",
         ],
-        year=2024,
+        year=2025,
         latitude=49.4,
         longitude=0.1,
         clean_up=False,
