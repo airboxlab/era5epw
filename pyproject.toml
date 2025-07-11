@@ -25,6 +25,7 @@ netcdf4 = "1.7.2"
 # zarr = "3.0.10"
 
 [tool.poetry.scripts]
+download = "era5epw.main:download"
 tests = "tests.discover:run"
 
 [build-system]

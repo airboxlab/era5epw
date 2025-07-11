@@ -35,7 +35,7 @@ poetry install
 Example usage:
 
 ```bash
-poetry run python era5epw/main.py --year 2024 --latitude 49.4 --longitude 0.1 --city-name "Le Havre" --elevation 0 --time-zone 1
+poetry run download --year 2024 --latitude 49.4 --longitude 0.1 --city-name "Le Havre" --elevation 0 --time-zone 1
 ```
 
 # Documentation
