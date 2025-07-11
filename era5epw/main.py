@@ -135,16 +135,9 @@ def download_and_make_epw(
             method="bfill",
         )
 
-    if len(era5_df) != len(cams_df):
-        logging.warning(
-            f"Length mismatch: ERA5 has {len(era5_df)} entries, CAMS has {len(cams_df)} entries. "
-            "Aligning ERA5 data to CAMS."
-        )
-        if len(era5_df) < len(cams_df):
-            cams_df = cams_df.loc[cams_df.index[0] : era5_df.index[-1]]
-        else:
-            era5_df = era5_df.loc[era5_df.index[0] : cams_df.index[-1]]
-
+    # Align ERA5 and CAMS dataframes to the same time range
+    # their indices may not match exactly, especially when the year is not complete (e.g. current year)
+    era5_df, cams_df = era5_df.align(cams_df, join="inner", axis=0)
     assert era5_df.index.equals(cams_df.index), "Time indices of ERA5 and CAMS data do not match"
 
     # Extract variables, convert to correct units
