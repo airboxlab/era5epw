@@ -117,6 +117,47 @@ def make_cds_request(
         )
 
 
+def make_intermediate_file_names(
+    tmpdir: str, year: int, cds_requests: list[dict[str, any]]
+) -> list[str]:
+    """Generate a list of temporary file names for storing intermediate results of CDS requests.
+
+    :param tmpdir: Temporary directory where intermediate files will be stored.
+    :param year: The year for which the data is requested.
+    :param cds_requests: List of CDS requests that will be executed.
+    :return: List of temporary file names.
+    """
+    # timeseries dataset requests have a 'date' field, while single-level requests have 'month'
+    # here we assume that requests are ordered, and the last request contains the latest date or month
+    last_request = cds_requests[-1]
+    if "date" in last_request:
+        # timeseries date format is 'YYYY-MM-DD/YYYY-MM-DD'
+        _, date_end = last_request["date"][0].split("/")
+        month_end = int(date_end.split("-")[1])
+        requested_months = [f"{m:02d}" for m in range(1, month_end + 1)]
+    else:
+        requested_months = [f"{m:02d}" for m in range(1, last_request["month"][0] + 1)]
+
+    # extract the variable names from all CDS requests
+    # not using a set to preserve the order of variables
+    variables = []
+    for cds_request in cds_requests:
+        if "variable" in cds_request:
+            for var in cds_request["variable"]:
+                if var not in variables:
+                    variables.append(var)
+        else:
+            raise ValueError("CDS request must contain 'variable' or 'variables' field.")
+
+    intermediate_files = [
+        os.path.join(tmpdir, f"era5_{year}_{month}_{var}.nc")
+        for month in requested_months
+        for var in variables
+    ]
+
+    return intermediate_files
+
+
 def download_era5_data(
     variables: [str],
     year: int,
@@ -173,16 +214,22 @@ def download_era5_data(
             if cds_request is not None:
                 cds_requests.append(cds_request)
 
+    if len(cds_requests) == 0:
+        raise ValueError(
+            f"No valid CDS requests could be created for year {year} and variables {variables}."
+        )
+
     logging.info(f"Running {len(cds_requests)} requests in parallel for {year}...")
 
     # make temporary directory for intermediate files
     # then download each month in parallel
     with TemporaryDirectory(delete=clean_up) as tmpdir:
-        intermediate_files = [
-            os.path.join(tmpdir, f"era5_{year}_{month:02d}_{var}.nc")
-            for month in range(1, 13)
-            for var in variables
-        ]
+        intermediate_files = make_intermediate_file_names(tmpdir, year, cds_requests)
+
+        assert len(cds_requests) == len(intermediate_files), (
+            "The number of CDS requests and intermediate files must match."
+            f" {len(cds_requests)} requests, {len(intermediate_files)} files."
+        )
 
         with Pool(parallel_exec_nb) as pool:
             _result = pool.starmap(
@@ -234,7 +281,7 @@ if __name__ == "__main__":
             "total_precipitation",
             "soil_temperature_level_1",
         ],
-        year=2024,
+        year=2025,
         latitude=49.4,
         longitude=0.1,
         clean_up=False,
