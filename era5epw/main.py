@@ -77,7 +77,7 @@ def create_args() -> ArgumentParser:
     return parser
 
 
-def make_epw(
+def download_and_make_epw(
     year: int,
     latitude: float,
     longitude: float,
@@ -149,7 +149,7 @@ def make_epw(
     uv_visible_albedo = era5_df["aluvp"].values  # (0-1 scale)
     snow_depth = era5_df["sd"].values * 100  # m to cm
     total_precipitation = era5_df["tp"].values * 1000  # m to mm
-    ghi = cams_df["GHI"].values  # Global Horizontal Irradiance in Wh/m^2
+    ghi = cams_df["GHI"].values  # Global horizontal all sky irradiation in Wh/m^2
     bni = cams_df["BNI"].values  # Direct normal all sky irradiation in Wh/m^2
     bhi = cams_df["BHI"].values  # Direct horizontal all sky irradiation in Wh/m^2
     dhi = cams_df["DHI"].values  # Diffuse horizontal irradiation in Wh/m^2
@@ -234,7 +234,7 @@ def make_epw(
     logging.info(f"EPW file written as {output_file}. Took {end_time - start_time} to generate.")
 
 
-if __name__ == "__main__":
+def download():
     args = create_args().parse_args()
 
     logging.info(
@@ -244,7 +244,7 @@ if __name__ == "__main__":
     if os.path.exists(args.output_file):
         logging.warning(f"Output file {args.output_file} already exists. It will be overwritten.")
 
-    make_epw(
+    download_and_make_epw(
         year=args.year,
         latitude=args.latitude,
         longitude=args.longitude,
@@ -254,3 +254,7 @@ if __name__ == "__main__":
         output_file=args.output_file,
         parallel_exec_nb=args.parallel_requests,
     )
+
+
+if __name__ == "__main__":
+    download()
