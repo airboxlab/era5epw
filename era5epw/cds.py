@@ -190,23 +190,20 @@ def download_era5_data(
                 ],
             )
 
-        dfs = []
-        for file_path in intermediate_files:
-            dfs.append(unzip_and_load_netcdf_to_df(file_path, clean_up=clean_up))
+        dfs = [
+            unzip_and_load_netcdf_to_df(file_path, clean_up=clean_up)
+            for file_path in intermediate_files
+        ]
 
         # concatenate all DataFrames into a single DataFrame
-        # concatenate variables along axis 1 and time along axis 0
-        dfs_by_month = {}
+        dfs_by_month = {month: [] for month in range(1, 13)}
         for df in dfs:
-            month = df.index.month[0]
-            if month not in dfs_by_month:
-                dfs_by_month[month] = []
-            dfs_by_month[month].append(df)
+            dfs_by_month[df.index.month[0]].append(df)
 
         # concatenate variables for each month
         dfs = [pd.concat(month_dfs, axis=1) for month_dfs in dfs_by_month.values()]
 
-        # concatenate along the index axis
+        # concatenate along the index (time) axis
         return pd.concat(dfs, axis=0, ignore_index=False)
 
 
