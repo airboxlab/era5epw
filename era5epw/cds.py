@@ -200,26 +200,30 @@ def download_era5_data(
             return unzip_and_load_netcdf_to_df(tmp_file.name, clean_up=clean_up)
 
     # split the request by month and variable
-    cds_requests = []
-    for month in range(1, 13):
-        for variable in variables:
-            cds_request = make_cds_request(
-                ds=dataset,
-                variables=[variable],
-                year=year,
-                month=month,
-                latitude=latitude,
-                longitude=longitude,
-            )
-            if cds_request is not None:
-                cds_requests.append(cds_request)
+    cds_requests = [
+        make_cds_request(
+            ds=dataset,
+            variables=[variable],
+            year=year,
+            month=month,
+            latitude=latitude,
+            longitude=longitude,
+        )
+        for month in range(1, 13)
+        for variable in variables
+    ]
+    # filter out None requests (e.g., for future months)
+    cds_requests = [req for req in cds_requests if req is not None]
 
     if len(cds_requests) == 0:
         raise ValueError(
             f"No valid CDS requests could be created for year {year} and variables {variables}."
         )
 
-    logging.info(f"Running {len(cds_requests)} requests in parallel for {year}...")
+    logging.info(
+        f"Running a total of {len(cds_requests)} requests "
+        f"with {parallel_exec_nb} parallel requests for {year}..."
+    )
 
     # make temporary directory for intermediate files
     # then download each month in parallel
