@@ -5,6 +5,7 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 from era5epw.ads import download_cams_solar_radiation_data
 from era5epw.cds import download_era5_data
@@ -74,6 +75,11 @@ def create_args() -> ArgumentParser:
         default=f"/tmp/era5epw_{datetime.now().strftime('%Y%m%d_%H%M%S')}.epw",
         help="Output file path for the generated EPW file.",
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable verbose logging from CDS client.",
+    )
     return parser
 
 
@@ -86,6 +92,7 @@ def download_and_make_epw(
     elevation: int,
     output_file: str,
     parallel_exec_nb: int = 10,
+    verbose: bool = False,
 ) -> None:
     """Generate a full year EPW file from ERA5 and CAMS data.
 
@@ -98,9 +105,14 @@ def download_and_make_epw(
     :param output_file: Path to save the generated EPW file.
     :param parallel_exec_nb: Number of parallel requests to make on CDS (ERA5 allows 10 per
         minute).
+    :param verbose: If True, enable verbose logging from CDS client.
     """
     start_time = datetime.now()
 
+    # Create overall progress bar for the two main download phases
+    overall_progress = tqdm(total=2, desc="Overall progress", unit="phase", position=0)
+
+    overall_progress.set_description("Downloading ERA5 data")
     era5_df = download_era5_data(
         variables=[
             "2m_temperature",
@@ -119,13 +131,18 @@ def download_and_make_epw(
         longitude=longitude,
         parallel_exec_nb=parallel_exec_nb,
         dataset=None,  # dynamic dataset selection based on variables
+        verbose=verbose,
     )
+    overall_progress.update(1)  # ERA5 download completed
 
+    overall_progress.set_description("Downloading CAMS solar radiation data")
     cams_df = download_cams_solar_radiation_data(
         longitude=longitude,
         latitude=latitude,
         year=year,
     )
+    overall_progress.update(1)  # CAMS download completed
+    overall_progress.close()
 
     # CAMS data has a (tz?) shift compared to ERA5, so we need to align them
     # interpolate first hour of the year with the first hour of CAMS
@@ -232,18 +249,23 @@ def download_and_make_epw(
         df.to_csv(f, index=False, header=False)
 
     end_time = datetime.now()
-    logging.info(f"EPW file written as {output_file}. Took {end_time - start_time} to generate.")
+    tqdm.write(f"EPW file written as {output_file}. Took {end_time - start_time} to generate.")
 
 
 def download():
+    from era5epw.logcfg import init_logging
+
     args = create_args().parse_args()
 
-    logging.info(
+    # Initialize logging with verbosity setting
+    init_logging(verbose=args.verbose)
+
+    tqdm.write(
         f"Generating EPW file for {args.city_name} ({args.latitude}, {args.longitude}) in {args.year}..."
     )
 
     if os.path.exists(args.output_file):
-        logging.warning(f"Output file {args.output_file} already exists. It will be overwritten.")
+        tqdm.write(f"Output file {args.output_file} already exists. It will be overwritten.")
 
     download_and_make_epw(
         year=args.year,
@@ -254,6 +276,7 @@ def download():
         elevation=args.elevation,
         output_file=args.output_file,
         parallel_exec_nb=args.parallel_requests,
+        verbose=args.verbose,
     )
 
 

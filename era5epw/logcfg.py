@@ -1,7 +1,11 @@
 import logging.config
 
 
-def init_logging() -> None:
+def init_logging(verbose: bool = False) -> None:
+    # Set CDS client logger levels based on verbosity
+    cds_log_level = "INFO" if verbose else "ERROR"
+    app_log_level = "INFO" if verbose else "WARNING"
+
     logging.config.dictConfig(
         {
             "version": 1,
@@ -23,6 +27,15 @@ def init_logging() -> None:
                     "stream": "ext://sys.stdout",  # Default is stderr
                 },
             },
-            "loggers": {"": {"handlers": ["default"], "level": "INFO"}},  # root logger
+            "loggers": {
+                "": {"handlers": ["default"], "level": app_log_level},  # root logger
+                "cdsapi": {"handlers": ["default"], "level": cds_log_level, "propagate": False},
+                "ecmwf.datastores.legacy_client": {
+                    "handlers": ["default"],
+                    "level": cds_log_level,
+                    "propagate": False,
+                },
+                "multiurl": {"handlers": ["default"], "level": cds_log_level, "propagate": False},
+            },
         }
     )

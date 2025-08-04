@@ -1,10 +1,10 @@
-import logging
 import os
 import tempfile
 from multiprocessing import Pool
 from tempfile import TemporaryDirectory
 
 import pandas as pd
+from tqdm import tqdm
 
 from era5epw.utils import (
     execute_download_request,
@@ -166,6 +166,7 @@ def download_era5_data(
     dataset: str | None = datasets[0],
     parallel_exec_nb: int = 4,
     clean_up: bool = True,
+    verbose: bool = False,
 ) -> pd.DataFrame:
     """Download data from the Climate Data Store (CDS) for a specific variable and time and return
     as a DataFrame.
@@ -180,6 +181,7 @@ def download_era5_data(
         12 (1 per month).
     :param clean_up: If True, remove individual month files after combining them into the
         target file.
+    :param verbose: If True, enable verbose logging from CDS client.
     :return: A DataFrame containing the downloaded data, combined on the 'time' dimension.
     """
     if parallel_exec_nb == 1:
@@ -194,32 +196,42 @@ def download_era5_data(
         )
 
         with tempfile.NamedTemporaryFile(dir="/tmp", suffix=".zip", delete=clean_up) as tmp_file:
-            execute_download_request(
-                url, cds_request["dataset"], cds_request, target_file=tmp_file.name
+            # Create progress bar for single ERA5 request
+            era5_progress = tqdm(
+                total=1, desc="ERA5 request", unit="request", position=1, leave=False
             )
+            execute_download_request(
+                url, cds_request["dataset"], cds_request, target_file=tmp_file.name, verbose=verbose
+            )
+            era5_progress.update(1)
+            era5_progress.close()
             return unzip_and_load_netcdf_to_df(tmp_file.name, clean_up=clean_up)
 
     # split the request by month and variable
-    cds_requests = []
-    for month in range(1, 13):
-        for variable in variables:
-            cds_request = make_cds_request(
-                ds=dataset,
-                variables=[variable],
-                year=year,
-                month=month,
-                latitude=latitude,
-                longitude=longitude,
-            )
-            if cds_request is not None:
-                cds_requests.append(cds_request)
+    cds_requests = [
+        make_cds_request(
+            ds=dataset,
+            variables=[variable],
+            year=year,
+            month=month,
+            latitude=latitude,
+            longitude=longitude,
+        )
+        for month in range(1, 13)
+        for variable in variables
+    ]
+    # filter out None requests (e.g., for future months)
+    cds_requests = [req for req in cds_requests if req is not None]
 
     if len(cds_requests) == 0:
         raise ValueError(
             f"No valid CDS requests could be created for year {year} and variables {variables}."
         )
 
-    logging.info(f"Running {len(cds_requests)} requests in parallel for {year}...")
+    tqdm.write(
+        f"Running a total of {len(cds_requests)} requests "
+        f"with {parallel_exec_nb} parallel requests for {year}..."
+    )
 
     # make temporary directory for intermediate files
     # then download each month in parallel
@@ -231,8 +243,14 @@ def download_era5_data(
             f" {len(cds_requests)} requests, {len(intermediate_files)} files."
         )
 
+        # Create progress bar for ERA5 requests
+        era5_progress = tqdm(
+            total=len(cds_requests), desc="ERA5 requests", unit="request", position=1, leave=False
+        )
+
         with Pool(parallel_exec_nb) as pool:
-            _result = pool.starmap(
+            # Use starmap_async to execute in parallel while maintaining progress tracking
+            result = pool.starmap_async(
                 execute_download_request,
                 [
                     (
@@ -240,10 +258,26 @@ def download_era5_data(
                         cds_request["dataset"],
                         cds_request,
                         intermediary_file,
+                        verbose,
                     )
                     for (cds_request, intermediary_file) in zip(cds_requests, intermediate_files)
                 ],
             )
+
+            # Poll for completion and update progress
+            while not result.ready():
+                # Count completed files to update progress
+                completed = sum(1 for f in intermediate_files if os.path.exists(f))
+                era5_progress.n = completed
+                era5_progress.refresh()
+                result.wait(timeout=1)  # Check every second
+
+            # Final update
+            era5_progress.n = len(cds_requests)
+            era5_progress.refresh()
+            _result = result.get()
+
+        era5_progress.close()
 
         dfs = [
             unzip_and_load_netcdf_to_df(file_path, clean_up=clean_up)

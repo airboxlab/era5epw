@@ -7,12 +7,53 @@ import random
 import time
 import zipfile
 from calendar import monthrange
+from types import TracebackType
 
 import cdsapi
 import pandas as pd
 import xarray as xr
+from ecmwf.datastores import legacy_client
 
 _api_key = None
+
+
+class QuietEra5LegacyClientLoggingContext:
+    """An override of the ecmwf.datastores.legacy_client.LoggingContext to set the logging level to
+    ERROR."""
+
+    def __init__(self, logger: logging.Logger, quiet: bool, debug: bool) -> None:
+        self.old_level = logger.level
+        if quiet:
+            # only change compared to original LoggingContext (WARNING -> ERROR)
+            logger.setLevel(logging.ERROR)
+        else:
+            logger.setLevel(logging.DEBUG if debug else logging.INFO)
+
+        self.new_handlers = []
+        if not logger.handlers:
+            formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+            handler = logging.StreamHandler()
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
+            self.new_handlers.append(handler)
+
+        self.logger = logger
+
+    def __enter__(self) -> logging.Logger:
+        return self.logger
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        self.logger.setLevel(self.old_level)
+        for handler in self.new_handlers:
+            self.logger.removeHandler(handler)
+
+
+legacy_client.LoggingContext = QuietEra5LegacyClientLoggingContext
 
 
 def load_api_key() -> str:
@@ -67,9 +108,9 @@ def make_cds_days_list(year, month) -> list[str]:
         return [f"{day:02d}" for day in range(1, days_in_month + 1)]
 
 
-def execute_download_request(url, dataset, cds_request, target_file):
+def execute_download_request(url, dataset, cds_request, target_file, verbose: bool = False):
     """Execute a CDS request and download the data to the target file."""
-    client = cdsapi.Client(url=url, key=load_api_key())
+    client = cdsapi.Client(url=url, key=load_api_key(), quiet=(not verbose))
     # wait for a random time between 0 and 10 seconds to avoid hitting the CDS API too hard
     time.sleep(random.uniform(0, 10))
     # Execute the CDS request
