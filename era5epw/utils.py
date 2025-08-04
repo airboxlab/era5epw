@@ -69,7 +69,7 @@ def make_cds_days_list(year, month) -> list[str]:
 
 def execute_download_request(url, dataset, cds_request, target_file):
     """Execute a CDS request and download the data to the target file."""
-    client = cdsapi.Client(url=url, key=load_api_key())
+    client = cdsapi.Client(url=url, key=load_api_key(), quiet=True)
     # wait for a random time between 0 and 10 seconds to avoid hitting the CDS API too hard
     time.sleep(random.uniform(0, 10))
     # Execute the CDS request
