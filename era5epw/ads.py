@@ -1,8 +1,8 @@
-import logging
 import tempfile
 
 import pandas as pd
 import xarray as xr
+from tqdm import tqdm
 
 from era5epw.utils import execute_download_request, now_utc
 
@@ -82,14 +82,18 @@ def download_cams_solar_radiation_data(
         raise ValueError("Cannot download data for future years.")
 
     with tempfile.NamedTemporaryFile(dir="/tmp", suffix=".nc", delete=clean_up) as temp_file:
+        # Create progress bar for CAMS request
+        cams_progress = tqdm(total=1, desc="CAMS request", unit="request", position=1, leave=False)
         execute_download_request(
             url=url,
             dataset=dataset,
             cds_request=request,
             target_file=temp_file.name,
         )
+        cams_progress.update(1)
+        cams_progress.close()
 
-        logging.info(f"Data downloaded to {temp_file.name}")
+        tqdm.write(f"Data downloaded to {temp_file.name}")
 
         ds = xr.open_dataset(temp_file.name)
         df = ds.to_dataframe()
