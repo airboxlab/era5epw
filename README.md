@@ -7,6 +7,8 @@ processing it, and formatting it into the EPW format. It's designed for fast and
 
 # Installation
 
+## Prerequisites
+
 Make sure to register for an API key and validate licences at:
 
 - https://cds.climate.copernicus.eu/ (ERA5 data)
@@ -24,9 +26,20 @@ The API key doesn't vary, it's the same for both ERA5 and CAMS data.
 
 Moreover, before proceeding, it is required to accept all the licenses in the section "Your profile" in the website of [Copernicus](https://cds.climate.copernicus.eu/profile?tab=licences).
 
-Install the required dependencies using [Poetry](https://python-poetry.org/):
+## Install the package
+
+### From PyPI
 
 ```bash
+pip install era5epw
+```
+
+### From source
+
+Clone the current repository and install the required dependencies using [Poetry](https://python-poetry.org/):
+
+```bash
+git clone https://github.com/airboxlab/era5epw.git
 poetry install
 ```
 
