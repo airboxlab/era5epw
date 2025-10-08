@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "era5epw"
-version = "0.1.0"
+version = "0.2.0"
 description = "A tool to convert ERA5/ECMWF data to EnergyPlus Weather (EPW) format"
 authors = ["Antoine Galataud <antoine@foobot.io>"]
 packages = [
@@ -21,7 +21,7 @@ cdsapi = "0.7.6"
 netcdf4 = "1.7.2"
 
 [tool.poetry.scripts]
-download = "era5epw.main:download"
+era5epw_download = "era5epw.main:download"
 tests = "tests.discover:run"
 
 [build-system]
