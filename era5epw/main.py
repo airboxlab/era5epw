@@ -43,6 +43,15 @@ def is_leap_year(y: int) -> bool:
     return (y % 4 == 0 and y % 100 != 0) or (y % 400 == 0)
 
 
+def make_data_period_end_date(df: pd.DataFrame) -> str:
+    """Return the data period end date string for the EPW header.
+
+    :param df: DataFrame containing the weather data.
+    :return: End date string in the format "MM/DD".
+    """
+    return df.iloc[-1][["Month", "Day"]].astype(int).astype(str).str.cat(sep="/")
+
+
 def create_args() -> ArgumentParser:
     """Create argument parser for command line arguments."""
     import argparse
@@ -231,6 +240,8 @@ def download_and_make_epw(
         )
         ground_temps = "0"
 
+    data_period_end_date = make_data_period_end_date(df)
+
     # Write header
     epw_header = [
         f"LOCATION,{city_name},,,ERA5 (ECMWF),n/a,{latitude:.2f},{longitude:.2f},{time_zone},{elevation}",
@@ -240,7 +251,7 @@ def download_and_make_epw(
         f"HOLIDAYS/DAYLIGHT SAVINGS,{'Yes' if is_leap_year(year) else 'No'},0,0,0",
         "COMMENTS 1,Data from ERA5 and CAMS via CDSAPI",
         "COMMENTS 2,Processed with Python - Provided with love by the Foobot Team",
-        f"DATA PERIODS,1,1,Data,{get_first_weekday_of_year(year)},1/1,12/31",
+        f"DATA PERIODS,1,1,Data,{get_first_weekday_of_year(year)},1/1,{data_period_end_date}",
     ]
 
     with open(output_file, "w") as f:
