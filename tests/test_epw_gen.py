@@ -7,6 +7,7 @@ from era5epw.main import (
     calc_monthly_soil_temperature,
     calc_rh,
     get_first_weekday_of_year,
+    make_data_period_end_date,
 )
 
 
@@ -40,3 +41,13 @@ class TestEpwGeneration(unittest.TestCase):
     def test_first_day_of_year(self):
         self.assertEqual(get_first_weekday_of_year(2023), "Sunday")
         self.assertEqual(get_first_weekday_of_year(2024), "Monday")
+
+    def test_make_data_period_end_date(self):
+        df = pd.DataFrame(
+            {
+                "Month": [1, 1, 1, 2, 2, 3],
+                "Day": [1, 2, 3, 1, 2, 3],
+            }
+        )
+        dp_end_date = make_data_period_end_date(df)
+        self.assertEqual(dp_end_date, "3/3")
