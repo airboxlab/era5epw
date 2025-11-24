@@ -55,6 +55,8 @@ poetry run era5epw_download --year 2024 --latitude 49.4 --longitude 0.1 --city-n
 era5epw_download --year 2024 --latitude 49.4 --longitude 0.1 --city-name "Le Havre" --elevation 0 --time-zone 1
 ```
 
+Use `--help` to have a list of available options.
+
 # Documentation
 
 [ERA5](https://confluence.ecmwf.int/display/CKB/ERA5%3A+data+documentation) \

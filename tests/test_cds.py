@@ -13,7 +13,7 @@ class TestCDS(unittest.TestCase):
             month=1,
             latitude=50.0,
             longitude=10.0,
-        )
+        )[0]
 
         self.assertEqual(request["dataset"], "reanalysis-era5-single-levels")
         self.assertIn("2m_temperature", request["variable"])
@@ -32,7 +32,7 @@ class TestCDS(unittest.TestCase):
             month=now.month,
             latitude=50.0,
             longitude=10.0,
-        )
+        )[0]
         self.assertEqual(request["year"], [str(now.year)])
         self.assertEqual(request["month"], [f"{now.month:02d}"])
         self.assertEqual(request["day"], [f"{d:02d}" for d in range(1, now.day + 1)])
@@ -66,7 +66,7 @@ class TestCDS(unittest.TestCase):
             month=1,
             latitude=50.0,
             longitude=10.0,
-        )
+        )[0]
 
         self.assertEqual(request["dataset"], "reanalysis-era5-single-levels-timeseries")
         self.assertIn("2m_temperature", request["variable"])
@@ -82,7 +82,7 @@ class TestCDS(unittest.TestCase):
             month=None,
             latitude=50.0,
             longitude=10.0,
-        )
+        )[0]
         self.assertEqual(request["date"], ["2021-01-01/2021-12-31"])
 
         now = now_utc()
@@ -93,14 +93,101 @@ class TestCDS(unittest.TestCase):
             month=None,
             latitude=50.0,
             longitude=10.0,
-        )
+        )[0]
         self.assertEqual(
             request["date"], [f"{now.year}-01-01/{now.year}-{now.month:02d}-{now.day:02d}"]
         )
 
+    def test_make_cds_request_single_level_with_time_zone(self):
+        requests = make_cds_request(
+            ds="reanalysis-era5-single-levels",
+            variables=["2m_temperature", "10m_u_component_of_wind"],
+            year=2021,
+            month=1,
+            latitude=50.0,
+            longitude=10.0,
+            time_zone=-8,
+        )
+        self.assertEqual(len(requests), 1)
+
+        requests = make_cds_request(
+            ds="reanalysis-era5-single-levels",
+            variables=["2m_temperature", "10m_u_component_of_wind"],
+            year=2021,
+            month=12,
+            latitude=50.0,
+            longitude=10.0,
+            time_zone=-8,
+        )
+        self.assertEqual(len(requests), 2)
+        main_req = requests[0]
+        self.assertEqual(main_req["year"], ["2021"])
+        self.assertEqual(main_req["month"], ["12"])
+        self.assertEqual(main_req["day"], [f"{d:02d}" for d in list(range(1, 32))])
+        tz_req = requests[1]
+        self.assertEqual(tz_req["year"], ["2022"])
+        self.assertEqual(tz_req["month"], ["01"])
+        self.assertEqual(tz_req["day"], ["01"])
+
+        requests = make_cds_request(
+            ds="reanalysis-era5-single-levels",
+            variables=["2m_temperature", "10m_u_component_of_wind"],
+            year=2021,
+            month=12,
+            latitude=50.0,
+            longitude=10.0,
+            time_zone=8,
+        )
+        self.assertEqual(len(requests), 1)
+
+        requests = make_cds_request(
+            ds="reanalysis-era5-single-levels",
+            variables=["2m_temperature", "10m_u_component_of_wind"],
+            year=2021,
+            month=1,
+            latitude=50.0,
+            longitude=10.0,
+            time_zone=8,
+        )
+        self.assertEqual(len(requests), 2)
+        main_req = requests[0]
+        self.assertEqual(main_req["year"], ["2021"])
+        self.assertEqual(main_req["month"], ["01"])
+        self.assertEqual(main_req["day"], [f"{d:02d}" for d in list(range(1, 32))])
+        tz_req = requests[1]
+        self.assertEqual(tz_req["year"], ["2020"])
+        self.assertEqual(tz_req["month"], ["12"])
+        self.assertEqual(tz_req["day"], ["31"])
+
+    def test_make_cds_request_ts_with_time_zone(self):
+        requests = make_cds_request(
+            ds="reanalysis-era5-single-levels-timeseries",
+            variables=["2m_temperature", "10m_u_component_of_wind"],
+            year=2021,
+            month=None,
+            latitude=50.0,
+            longitude=10.0,
+            time_zone=-8,
+        )
+        self.assertEqual(len(requests), 2)
+        self.assertEqual(requests[0]["date"], ["2021-01-01/2021-12-31"])
+        self.assertEqual(requests[1]["date"], ["2022-01-01/2022-01-01"])
+
+        requests = make_cds_request(
+            ds="reanalysis-era5-single-levels-timeseries",
+            variables=["2m_temperature", "10m_u_component_of_wind"],
+            year=2021,
+            month=None,
+            latitude=50.0,
+            longitude=10.0,
+            time_zone=8,
+        )
+        self.assertEqual(len(requests), 2)
+        self.assertEqual(requests[0]["date"], ["2021-01-01/2021-12-31"])
+        self.assertEqual(requests[1]["date"], ["2020-12-31/2020-12-31"])
+
     def test_make_intermediary_file_names_full_year(self):
         tmpdir = "/tmp"
-        year = 2021
         cds_requests = [
             {
                 "variable": ["2m_temperature", "10m_u_component_of_wind"],
@@ -109,14 +196,14 @@ class TestCDS(unittest.TestCase):
                 "location": {"longitude": 10.0, "latitude": 50.0},
             }
         ]
-        file_names = make_intermediate_file_names(tmpdir, year, cds_requests)
+        file_names = make_intermediate_file_names(tmpdir, cds_requests)
         self.assertEqual(len(file_names), 24)
         i = 0
         for month in range(1, 13):
             for var in ["2m_temperature", "10m_u_component_of_wind"]:
                 self.assertEqual(
                     file_names[i],
-                    f"{tmpdir}/era5_{year}_{month:02d}_{var}.nc",
+                    f"{tmpdir}/era5_2021_{month:02d}_{var}.nc",
                 )
                 i += 1
 
@@ -139,7 +226,7 @@ class TestCDS(unittest.TestCase):
                 for month in range(1, 8)
             ],
         ]
-        file_names = make_intermediate_file_names(tmpdir, year, cds_requests)
+        file_names = make_intermediate_file_names(tmpdir, cds_requests)
         self.assertEqual(len(file_names), 21)
         i = 0
         for month in range(1, 8):
