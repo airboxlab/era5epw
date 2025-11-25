@@ -32,17 +32,14 @@ def make_cams_solar_radiation_request(
     if year > now.year:
         return None  # Do not allow requests for future years
 
-    start_day = f"{year}-01-01"
+    # We start fetching at year - 1 even if time_zone is None as CAMS data starts at 01:00 UTC
+    start_day = f"{year - 1}-12-31"
     end_day = f"{year}-12-31"
-    today = now.strftime("%Y-%m-%d")
-
     # Adjust date range based on time zone if provided
-    if time_zone is not None:
-        if time_zone > 0:
-            start_day = f"{year - 1}-12-31"
-        elif time_zone < 0:
-            end_day = f"{year + 1}-01-01"
+    if time_zone is not None and time_zone < 0:
+        end_day = f"{year + 1}-01-01"
 
+    today = now.strftime("%Y-%m-%d")
     if end_day > today:
         end_day = today
 

@@ -179,11 +179,12 @@ def download_and_make_epw(
         era5_df.index = era5_df.index + pd.Timedelta(hours=time_zone)
         cams_df.index = cams_df.index + pd.Timedelta(hours=time_zone)
 
-        # Filter to keep only data within the target year in the local time zone
-        series_start = f"{year}-01-01 00:00:00"
-        series_end = f"{year}-12-31 23:00:00"
-        era5_df = era5_df.truncate(before=series_start, after=series_end)
-        cams_df = cams_df.truncate(before=series_start, after=series_end)
+    # Filter to keep only data within the target year
+    # (filters out extra days added for time zone or to accommodate with missing first hour)
+    series_start = f"{year}-01-01 00:00:00"
+    series_end = f"{year}-12-31 23:00:00"
+    era5_df = era5_df.truncate(before=series_start, after=series_end)
+    cams_df = cams_df.truncate(before=series_start, after=series_end)
 
     # Align ERA5 and CAMS dataframes to the same time range
     # their indices may not match exactly, especially when the year is not complete (e.g. current year)
@@ -327,5 +328,5 @@ if __name__ == "__main__":
         output_file=f"/tmp/era5epw_{datetime.now().strftime('%Y%m%d_%H%M%S')}.epw",
         parallel_exec_nb=10,
         verbose=False,
-        apply_time_zone_to_data=True,
+        apply_time_zone_to_data=False,
     )

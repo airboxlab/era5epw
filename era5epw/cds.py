@@ -105,7 +105,7 @@ def make_cds_request(
         # Adjust date range based on time zone if provided.
         # We append an additional 1-day request to cover the shifted time zone
         if time_zone is not None:
-            if time_zone > 0 and month_start == 1:
+            if time_zone >= 0 and month_start == 1:
                 start_date_str = f"{year - 1}-12-31"
                 end_date_str = f"{year - 1}-12-31"
             elif time_zone < 0 and month_end == 12:
@@ -117,6 +117,11 @@ def make_cds_request(
             tz_request = main_request.copy()
             tz_request["date"] = [f"{start_date_str}/{end_date_str}"]
             return [main_request, tz_request]
+
+        elif time_zone is None and month_start == 1:
+            prev_day_request = main_request.copy()
+            prev_day_request["date"] = [f"{year - 1}-12-31/{year - 1}-12-31"]
+            return [prev_day_request, main_request]
 
         else:
             return [main_request]
@@ -140,7 +145,7 @@ def make_cds_request(
 
         # extend the request to cover time zone shifts
         if time_zone is not None:
-            if time_zone > 0 and month_start == 1:
+            if time_zone >= 0 and month_start == 1:
                 tz_request = main_request.copy()
                 tz_request["year"] = [str(year - 1)]
                 tz_request["month"] = ["12"]
@@ -152,6 +157,14 @@ def make_cds_request(
                 tz_request["month"] = ["01"]
                 tz_request["day"] = ["01"]
                 return [main_request, tz_request]
+
+        # add previous year's last day to fetch 00:00
+        elif time_zone is None and month == 1:
+            prev_day_request = main_request.copy()
+            prev_day_request["year"] = [str(year - 1)]
+            prev_day_request["month"] = ["12"]
+            prev_day_request["day"] = ["31"]
+            return [prev_day_request, main_request]
 
         return [main_request]
 

@@ -54,9 +54,9 @@ class TestTimeZoneHandling(unittest.TestCase):
             longitude=10.0,
             time_zone=None,
         )
-        self.assertEqual(1, len(request))
-        self.assertEqual(request[0]["dataset"], "reanalysis-era5-single-levels-timeseries")
-        self.assertEqual(request[0]["date"], ["2021-01-01/2021-12-31"])
+        self.assertEqual(2, len(request))
+        self.assertEqual(request[0]["date"], ["2020-12-31/2020-12-31"])
+        self.assertEqual(request[1]["date"], ["2021-01-01/2021-12-31"])
 
     def test_make_cams_request_with_positive_time_zone(self):
         """Test that positive time zone adds a day at the end for CAMS."""
@@ -78,7 +78,7 @@ class TestTimeZoneHandling(unittest.TestCase):
             time_zone=-8,  # -8 hours from UTC
         )
 
-        self.assertEqual(request["date"], ["2021-01-01/2022-01-01"])
+        self.assertEqual(request["date"], ["2020-12-31/2022-01-01"])
 
     def test_make_cams_request_without_time_zone(self):
         """Test that without time zone, the date range is unchanged for CAMS."""
@@ -89,7 +89,7 @@ class TestTimeZoneHandling(unittest.TestCase):
             time_zone=None,
         )
 
-        self.assertEqual(request["date"], ["2021-01-01/2021-12-31"])
+        self.assertEqual(request["date"], ["2020-12-31/2021-12-31"])
 
     def test_make_cams_request_with_zero_time_zone(self):
         """Test that zero time zone doesn't add extra days."""
@@ -100,7 +100,7 @@ class TestTimeZoneHandling(unittest.TestCase):
             time_zone=0,  # UTC
         )
 
-        self.assertEqual(request["date"], ["2021-01-01/2021-12-31"])
+        self.assertEqual(request["date"], ["2020-12-31/2021-12-31"])
 
     def test_make_cds_request_with_zero_time_zone(self):
         """Test that zero time zone doesn't add extra days."""
@@ -114,5 +114,6 @@ class TestTimeZoneHandling(unittest.TestCase):
             time_zone=0,  # UTC
         )
 
-        self.assertEqual(1, len(request))
+        self.assertEqual(2, len(request))
         self.assertEqual(request[0]["date"], ["2021-01-01/2021-12-31"])
+        self.assertEqual(request[1]["date"], ["2020-12-31/2020-12-31"])

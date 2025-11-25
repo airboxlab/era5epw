@@ -20,7 +20,7 @@ class TestADS(unittest.TestCase):
         self.assertEqual(request["location"]["longitude"], 10.0)
         self.assertEqual(request["location"]["latitude"], 50.0)
         self.assertEqual(request["altitude"], ["0"])
-        self.assertEqual(request["date"], ["2021-01-01/2021-12-31"])
+        self.assertEqual(request["date"], ["2020-12-31/2021-12-31"])
         self.assertEqual(request["time_step"], "1hour")
         self.assertEqual(request["time_reference"], "universal_time")
         self.assertEqual(request["format"], "netcdf")
@@ -38,7 +38,7 @@ class TestADS(unittest.TestCase):
         )
 
         self.assertEqual(
-            request["date"], [f"{now.year}-01-01/{now.year}-{now.month:02d}-{now.day:02d}"]
+            request["date"], [f"{now.year - 1}-12-31/{now.year}-{now.month:02d}-{now.day:02d}"]
         )
 
     def test_make_cams_solar_radiation_request_future_year(self):
