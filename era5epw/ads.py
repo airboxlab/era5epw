@@ -18,6 +18,7 @@ def make_cams_solar_radiation_request(
     altitude: list[str] | None = None,
     time_step: str = "1hour",
     time_reference: str = "universal_time",
+    time_zone: int | None = None,
 ) -> dict[str, any] | None:
     assert sky_type in [
         "clear",
@@ -31,7 +32,13 @@ def make_cams_solar_radiation_request(
     if year > now.year:
         return None  # Do not allow requests for future years
 
+    # We start fetching at year - 1 even if time_zone is None as CAMS data starts at 01:00 UTC
+    start_day = f"{year - 1}-12-31"
     end_day = f"{year}-12-31"
+    # Adjust date range based on time zone if provided
+    if time_zone is not None and time_zone < 0:
+        end_day = f"{year + 1}-01-01"
+
     today = now.strftime("%Y-%m-%d")
     if end_day > today:
         end_day = today
@@ -40,7 +47,7 @@ def make_cams_solar_radiation_request(
         "sky_type": sky_type,
         "location": {"longitude": longitude, "latitude": latitude},
         "altitude": altitude,
-        "date": [f"{year}-01-01/{end_day}"],
+        "date": [f"{start_day}/{end_day}"],
         "time_step": time_step,
         "time_reference": time_reference,
         "format": "netcdf",
@@ -56,6 +63,7 @@ def download_cams_solar_radiation_data(
     time_step: str = "1hour",
     time_reference: str = "universal_time",
     clean_up: bool = True,
+    time_zone: int | None = None,
 ) -> pd.DataFrame:
     """Download solar radiation data from the Copernicus Atmosphere Data Store (CAMS).
 
@@ -67,6 +75,8 @@ def download_cams_solar_radiation_data(
     :param time_step: Time step for the data, default is "1hour".
     :param time_reference: Time reference for the data, default is "universal_time".
     :param clean_up: If True, remove the temporary file after processing.
+    :param time_zone: Time zone offset from UTC. If provided, will adjust date range to
+        fetch additional data needed for time zone conversion.
     """
     request = make_cams_solar_radiation_request(
         longitude=longitude,
@@ -76,6 +86,7 @@ def download_cams_solar_radiation_data(
         altitude=altitude,
         time_step=time_step,
         time_reference=time_reference,
+        time_zone=time_zone,
     )
 
     if request is None:

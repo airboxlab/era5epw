@@ -55,6 +55,10 @@ poetry run era5epw_download --year 2024 --latitude 49.4 --longitude 0.1 --city-n
 era5epw_download --year 2024 --latitude 49.4 --longitude 0.1 --city-name "Le Havre" --elevation 0 --time-zone 1
 ```
 
+By default, the `time-zone` argument is used only to populate the `LOCATION` header and data time is UTC. Use `--apply-time-zone-to-data` to apply it to the date and time fields (this will shift the UTC time by the provided time zone offset).
+
+Use `--help` to have a list of available options.
+
 # Documentation
 
 [ERA5](https://confluence.ecmwf.int/display/CKB/ERA5%3A+data+documentation) \

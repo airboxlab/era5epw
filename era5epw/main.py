@@ -60,9 +60,9 @@ def create_args() -> ArgumentParser:
         description="Generate a full year EPW file from ERA5 and CAMS data."
     )
     parser.add_argument(
-        "--year", type=int, default=2023, help="Year for which to generate the EPW file."
+        "--year", type=int, default=2024, help="Year for which to generate the EPW file."
     )
-    parser.add_argument("--latitude", type=float, default=48.5, help="Latitude of the location.")
+    parser.add_argument("--latitude", type=float, default=49.5, help="Latitude of the location.")
     parser.add_argument("--longitude", type=float, default=2.5, help="Longitude of the location.")
     parser.add_argument(
         "--parallel-requests",
@@ -89,6 +89,11 @@ def create_args() -> ArgumentParser:
         action="store_true",
         help="Enable verbose logging from CDS client.",
     )
+    parser.add_argument(
+        "--apply-time-zone-to-data",
+        action="store_true",
+        help="Apply time zone offset to data timestamps. If false (default), UTC time is kept.",
+    )
     return parser
 
 
@@ -102,6 +107,7 @@ def download_and_make_epw(
     output_file: str,
     parallel_exec_nb: int = 10,
     verbose: bool = False,
+    apply_time_zone_to_data: bool = False,
 ) -> None:
     """Generate a full year EPW file from ERA5 and CAMS data.
 
@@ -115,11 +121,32 @@ def download_and_make_epw(
     :param parallel_exec_nb: Number of parallel requests to make on CDS (ERA5 allows 10 per
         minute).
     :param verbose: If True, enable verbose logging from CDS client.
+    :param apply_time_zone_to_data: If True, apply time zone offset to data timestamps.
     """
     start_time = datetime.now()
 
+    # Log whether time zone is being applied to data
+    if apply_time_zone_to_data:
+        logging.info(
+            f"Time zone offset of {time_zone:+d} hours will be applied to data timestamps."
+        )
+    else:
+        logging.info(
+            f"Data will use UTC time. Time zone offset of {time_zone:+d} hours "
+            "will only be used in EPW LOCATION header."
+        )
+
     # Create overall progress bar for the two main download phases
     overall_progress = tqdm(total=2, desc="Overall progress", unit="phase", position=0)
+
+    overall_progress.set_description("Downloading CAMS solar radiation data")
+    cams_df = download_cams_solar_radiation_data(
+        longitude=longitude,
+        latitude=latitude,
+        year=year,
+        time_zone=time_zone if apply_time_zone_to_data else None,
+    )
+    overall_progress.update(1)  # CAMS download completed
 
     overall_progress.set_description("Downloading ERA5 data")
     era5_df = download_era5_data(
@@ -141,25 +168,23 @@ def download_and_make_epw(
         parallel_exec_nb=parallel_exec_nb,
         dataset=None,  # dynamic dataset selection based on variables
         verbose=verbose,
+        time_zone=time_zone if apply_time_zone_to_data else None,
     )
     overall_progress.update(1)  # ERA5 download completed
-
-    overall_progress.set_description("Downloading CAMS solar radiation data")
-    cams_df = download_cams_solar_radiation_data(
-        longitude=longitude,
-        latitude=latitude,
-        year=year,
-    )
-    overall_progress.update(1)  # CAMS download completed
     overall_progress.close()
 
-    # CAMS data has a (tz?) shift compared to ERA5, so we need to align them
-    # interpolate first hour of the year with the first hour of CAMS
-    if cams_df.index[0] != pd.Timestamp(f"{year}-01-01 00:00"):
-        cams_df = cams_df.reindex(
-            pd.date_range(start=f"{year}-01-01 00:00", end=cams_df.index[-1], freq="1h"),
-            method="bfill",
-        )
+    # Apply time zone shift if requested
+    if apply_time_zone_to_data:
+        logging.info(f"Applying time zone offset of {time_zone:+d} hours to data timestamps.")
+        era5_df.index = era5_df.index + pd.Timedelta(hours=time_zone)
+        cams_df.index = cams_df.index + pd.Timedelta(hours=time_zone)
+
+    # Filter to keep only data within the target year
+    # (filters out extra days added for time zone or to accommodate with missing first hour)
+    series_start = f"{year}-01-01 00:00:00"
+    series_end = f"{year}-12-31 23:00:00"
+    era5_df = era5_df.truncate(before=series_start, after=series_end)
+    cams_df = cams_df.truncate(before=series_start, after=series_end)
 
     # Align ERA5 and CAMS dataframes to the same time range
     # their indices may not match exactly, especially when the year is not complete (e.g. current year)
@@ -256,8 +281,8 @@ def download_and_make_epw(
 
     with open(output_file, "w") as f:
         for line in epw_header:
-            f.write(line + "\n")
-        df.to_csv(f, index=False, header=False)
+            f.write(line + os.linesep)
+        df.to_csv(f, index=False, header=False, lineterminator=os.linesep)
 
     end_time = datetime.now()
     tqdm.write(f"EPW file written as {output_file}. Took {end_time - start_time} to generate.")
@@ -288,8 +313,20 @@ def download():
         output_file=args.output_file,
         parallel_exec_nb=args.parallel_requests,
         verbose=args.verbose,
+        apply_time_zone_to_data=args.apply_time_zone_to_data,
     )
 
 
 if __name__ == "__main__":
-    download()
+    download_and_make_epw(
+        year=2024,
+        latitude=49.4,
+        longitude=0.1,
+        city_name="Le Havre",
+        time_zone=1,
+        elevation=0,
+        output_file=f"/tmp/era5epw_{datetime.now().strftime('%Y%m%d_%H%M%S')}.epw",
+        parallel_exec_nb=10,
+        verbose=False,
+        apply_time_zone_to_data=False,
+    )
