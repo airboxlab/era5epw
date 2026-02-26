@@ -134,7 +134,7 @@ def make_cds_request(
         main_request = {
             "dataset": ds,
             "product_type": "reanalysis",
-            "format": "netcdf",
+            "data_format": "netcdf",
             "variable": variables,
             "year": [str(year)],
             "month": [f"{month:02d}"],
