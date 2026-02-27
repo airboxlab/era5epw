@@ -1,3 +1,7 @@
+[![tests](https://github.com/airboxlab/era5epw/actions/workflows/tests.yml/badge.svg)](https://github.com/airboxlab/era5epw/actions/workflows/tests.yml)
+![PyPI](https://img.shields.io/pypi/v/era5epw?label=pypi%20package)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/era5epw?label=pypi%20downloads&color=blue)
+
 # ERA5 to EPW Converter
 
 A tool that fetches ERA5 data and generates a full year AMY (Actual Meteorological Year) EnergyPlus Weather file (EPW).
