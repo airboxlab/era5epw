@@ -134,13 +134,18 @@ def make_cds_request(
         main_request = {
             "dataset": ds,
             "product_type": "reanalysis",
-            "format": "netcdf",
+            "data_format": "netcdf",
             "variable": variables,
             "year": [str(year)],
             "month": [f"{month:02d}"],
             "day": make_cds_days_list(year, month),
             "time": [f"{i:02d}:00" for i in range(24)],
-            "area": [latitude, longitude, latitude, longitude],
+            # North, West, South, East corner points of the area to extract.
+            # Since 25th Feb 2026, point extraction isn't supported anymore on this dataset, we need to specify an area.
+            # See:
+            # https://forum.ecmwf.int/t/software-upgrade-for-data-extraction-of-a-geographical-area-from-selected-era5-and-seasonal-forecast-datasets/14583
+            # https://confluence.ecmwf.int/display/CKB/Software+upgrade+for+geographical+area+extraction+from+data+on+regular+lat-lon+grids
+            "area": [latitude + 0.1, longitude - 0.1, latitude - 0.1, longitude + 0.1],
         }
 
         # extend the request to cover time zone shifts

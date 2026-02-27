@@ -28,7 +28,7 @@ class TestCDS(unittest.TestCase):
         self.assertEqual(main_request["year"], ["2021"])
         self.assertEqual(main_request["month"], ["01"])
         self.assertEqual(main_request["day"], [f"{d:02d}" for d in list(range(1, 32))])
-        self.assertEqual(main_request["area"], [50.0, 10.0, 50.0, 10.0])
+        self.assertEqual(main_request["area"], [50.1, 9.9, 49.9, 10.1])
 
     def test_make_cds_request_era5_single_levels_current_month(self):
         now = now_utc()
