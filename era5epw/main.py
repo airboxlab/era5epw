@@ -5,7 +5,7 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from era5epw.ads import download_cams_solar_radiation_data
 from era5epw.cds import download_era5_data

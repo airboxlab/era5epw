@@ -1,3 +1,7 @@
+[![tests](https://github.com/airboxlab/era5epw/actions/workflows/tests.yml/badge.svg)](https://github.com/airboxlab/era5epw/actions/workflows/tests.yml)
+![PyPI](https://img.shields.io/pypi/v/era5epw?label=pypi%20package)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/era5epw?label=pypi%20downloads&color=blue)
+
 # ERA5 to EPW Converter
 
 A tool that fetches ERA5 data and generates a full year AMY (Actual Meteorological Year) EnergyPlus Weather file (EPW).
@@ -45,6 +49,8 @@ poetry install
 
 # Usage
 
+## Command line interface
+
 Example usage:
 
 ```bash
@@ -58,6 +64,35 @@ era5epw_download --year 2024 --latitude 49.4 --longitude 0.1 --city-name "Le Hav
 By default, the `time-zone` argument is used only to populate the `LOCATION` header and data time is UTC. Use `--apply-time-zone-to-data` to apply it to the date and time fields (this will shift the UTC time by the provided time zone offset).
 
 Use `--help` to have a list of available options.
+
+## Python API
+
+Example usage:
+
+```python
+from era5epw.main import download_and_make_epw
+
+download_and_make_epw(
+    year=2025,
+    latitude=48.8,
+    longitude=2.4,
+    city_name="Paris",
+    time_zone=1,
+    elevation=0,
+    output_file="/tmp/era5epw_paris_2025.epw",
+    apply_time_zone_to_data=True,
+)
+```
+
+When running in a Jupyter notebook, to make progress bars and interactive widgets work, make sure to install `ipywidgets` and to enable the widgets extension:
+
+```bash
+pip install ipywidgets
+# optional, not needed with Jupyter Notebook 7+
+jupyter nbextension enable --py widgetsnbextension
+```
+
+![nb_ex](./doc/era5epw_tqdm_notebook.gif)
 
 # Documentation
 
