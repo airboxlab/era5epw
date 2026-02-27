@@ -3,7 +3,7 @@ from multiprocessing import Pool
 from tempfile import TemporaryDirectory
 
 import pandas as pd
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from era5epw.utils import (
     execute_download_request,

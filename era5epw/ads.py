@@ -2,7 +2,7 @@ import tempfile
 
 import pandas as pd
 import xarray as xr
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from era5epw.utils import execute_download_request, now_utc
 
