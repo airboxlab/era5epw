@@ -21,6 +21,8 @@ repos:
         args: ["--maxkb=1500", "--enforce-all"]
         exclude: |
           (?x)^(
+            .*\.ipynb
+            |.*\.gif
           )$
 
   - repo: https://github.com/python-poetry/poetry
