@@ -6,3 +6,5 @@
 dist/
 
 requirements.txt
+**/.ipynb_checkpoints/
+**/.jupyter_ystore.db

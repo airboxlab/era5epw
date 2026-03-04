@@ -6,7 +6,9 @@ import os.path
 import random
 import time
 import zipfile
+from base64 import b64encode
 from calendar import monthrange
+from pathlib import Path
 from types import TracebackType
 
 import cdsapi
@@ -178,3 +180,20 @@ def concat_netcdf_files_to_df(file_paths, time_dim: int = 0) -> pd.DataFrame:
 
     combined_ds = pd.concat(datasets, axis=0).sort_index()
     return combined_ds
+
+
+def generate_download_link(file_path: str, link_text: str = "Download file"):
+    """Generate a download link for a file. Useful for Jupyter notebooks to allow users to download
+    files generated in the notebook.
+
+    :param file_path: Path to the file to be downloaded.
+    :param link_text: Text to be displayed for the download link.
+    :return: HTML string containing the download link.
+    """
+    from IPython.core.display import HTML  # type: ignore
+
+    file_data = Path(file_path).read_bytes()
+    return HTML(
+        f'<a href="data:application/octet-stream;base64,{b64encode(file_data).decode()}" '
+        f'download="{Path(file_path).name}">{link_text}</a>'
+    )

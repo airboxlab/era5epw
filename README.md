@@ -50,7 +50,18 @@ poetry install
 
 # Usage
 
-## Command line interface
+> \[!NOTE\]
+> When running in a Jupyter notebook, to make progress bars and interactive widgets work, make sure to install `ipywidgets` and to enable the widgets extension.
+
+```bash
+pip install ipywidgets
+# optional, not needed with Jupyter Notebook 7+
+jupyter nbextension enable --py widgetsnbextension
+```
+
+## Generating EPW Files
+
+### Command line interface
 
 Example usage:
 
@@ -66,7 +77,7 @@ By default, the `time-zone` argument is used only to populate the `LOCATION` hea
 
 Use `--help` to have a list of available options.
 
-## Python API
+### Python API
 
 Example usage:
 
@@ -85,15 +96,65 @@ download_and_make_epw(
 )
 ```
 
-When running in a Jupyter notebook, to make progress bars and interactive widgets work, make sure to install `ipywidgets` and to enable the widgets extension:
+## Visualizing EPW Files
+
+The package includes an interactive visualization tool for EPW files that supports three types of plots: 2D line charts, 3D surface plots, and radar (polar) plots.
+
+### Command line interface
 
 ```bash
-pip install ipywidgets
-# optional, not needed with Jupyter Notebook 7+
-jupyter nbextension enable --py widgetsnbextension
+# List available weather series in an EPW file
+era5epw_visualize path/to/file.epw --list-series
+
+# Create a 2D line plot (default)
+era5epw_visualize path/to/file.epw --series "Dry Bulb Temperature" --type 2D
+
+# Create a 3D surface plot
+era5epw_visualize path/to/file.epw --series "Wind Speed" --type 3D
+
+# Create a radar plot showing daily min/max values
+era5epw_visualize path/to/file.epw --series "Global Horizontal Radiation" --type radar
+
+# Save visualization to HTML file
+era5epw_visualize path/to/file.epw --series "Dry Bulb Temperature" --output visualization.html
 ```
 
-![nb_ex](./doc/era5epw_tqdm_notebook.gif)
+### Python API
+
+Use in Jupyter notebooks or Python scripts:
+
+```python
+from era5epw.visualize import visualize_epw
+
+# Create interactive 2D plot
+fig = visualize_epw(
+    epw_file_path="path/to/file.epw",
+    series_name="Dry Bulb Temperature",
+    plot_type="2D",
+    show=True  # Display immediately in Jupyter
+)
+
+# Create 3D surface plot
+fig = visualize_epw(
+    epw_file_path="path/to/file.epw",
+    series_name="Wind Speed",
+    plot_type="3D",
+    show=True
+)
+
+# Create radar plot
+fig = visualize_epw(
+    epw_file_path="path/to/file.epw",
+    series_name="Global Horizontal Radiation",
+    plot_type="radar",
+    show=True
+)
+
+# Save to HTML file
+fig.write_html("visualization.html")
+```
+
+[![EPW Visualization](./doc/era5epw_dl_viz_notebook.gif)](./doc/era5epw_dl_viz_notebook.gif)
 
 # Documentation
 
