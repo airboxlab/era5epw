@@ -1,6 +1,6 @@
 [![tests](https://github.com/airboxlab/era5epw/actions/workflows/tests.yml/badge.svg)](https://github.com/airboxlab/era5epw/actions/workflows/tests.yml)
-![PyPI - Version](https://img.shields.io/pypi/v/era5epw)
-![PyPI - Downloads](https://img.shields.io/pypi/dm/era5epw)
+![PyPI - Version](https://img.shields.io/pypi/v/era5epw.svg)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/era5epw.svg)
 ![GitHub License](https://img.shields.io/github/license/airboxlab/era5epw)
 
 # ERA5 to EPW Converter
