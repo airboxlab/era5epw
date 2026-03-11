@@ -270,7 +270,9 @@ def download_era5_data(
         for variable in variables
     ]
     # flatten the list of lists and remove None entries
-    cds_requests = [req for sublist in cds_requests for req in sublist if req is not None]
+    cds_requests = [
+        req for sublist in cds_requests if sublist is not None for req in sublist if req is not None
+    ]
 
     if len(cds_requests) == 0:
         raise ValueError(
@@ -367,9 +369,9 @@ if __name__ == "__main__":
             "total_precipitation",
             "soil_temperature_level_1",
         ],
-        year=2024,
-        latitude=49.4,
-        longitude=0.1,
+        year=2026,
+        latitude=48.9,
+        longitude=2.4,
         clean_up=False,
         parallel_exec_nb=10,
         time_zone=1,
