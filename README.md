@@ -19,6 +19,19 @@ Make sure to register for an API key and validate licences at:
 - https://cds.climate.copernicus.eu/ (ERA5 data)
 - https://ads.atmosphere.copernicus.eu/ (Copernicus Atmosphere Data Store)
 
+Before proceeding further, it is required to accept all the licenses in the section "Your profile" in the website of [Copernicus](https://cds.climate.copernicus.eu/profile?tab=licences).
+
+### Passing the key as environment variable
+
+This is the easiest method. Use:
+
+```python
+import os
+os.environ["CDSADS_API_KEY"] = "YOUR_KEY"
+```
+
+### Installing the API key in your filesytem
+
 Then create the file `~/.cdsapirc` with the following content:
 
 ```ini
@@ -28,8 +41,6 @@ key: <your_api_key>
 
 Note: the URL will be dynamically managed by the script depending on the data source.
 The API key doesn't vary, it's the same for both ERA5 and CAMS data.
-
-Moreover, before proceeding, it is required to accept all the licenses in the section "Your profile" in the website of [Copernicus](https://cds.climate.copernicus.eu/profile?tab=licences).
 
 ## Install the package
 
