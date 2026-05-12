@@ -1,6 +1,7 @@
 import os
 from multiprocessing import Pool
 from tempfile import TemporaryDirectory
+from typing import Any
 
 import pandas as pd
 from tqdm.auto import tqdm
@@ -30,9 +31,11 @@ supported_vars_by_dataset = {
         "10m_u_component_of_wind",
         "10m_v_component_of_wind",
         "surface_pressure",
+        "total_cloud_cover",
     ],
     "reanalysis-era5-land-timeseries": [
         "soil_temperature_level_1",
+        "snow_depth",
     ],
     "reanalysis-era5-single-levels": ["*"],
 }
@@ -40,13 +43,13 @@ supported_vars_by_dataset = {
 
 def make_cds_request(
     ds: str | None,
-    variables: [str],
+    variables: list[str],
     year: int,
     month: int | None,
     latitude: float,
     longitude: float,
     time_zone: int | None = None,
-) -> list[dict[str, any]] | None:
+) -> list[dict[str, Any]] | None:
     """Create a CDS request for the specified parameters.
 
     :param ds: The dataset to use, e.g., 'reanalysis-era5-single-levels-timeseries'.
@@ -179,7 +182,7 @@ def make_cds_request(
         )
 
 
-def make_intermediate_file_names(tmpdir: str, cds_requests: list[dict[str, any]]) -> list[str]:
+def make_intermediate_file_names(tmpdir: str, cds_requests: list[dict[str, Any]]) -> list[str]:
     """Generate a list of temporary file names for storing intermediate results of CDS requests.
 
     :param tmpdir: Temporary directory where intermediate files will be stored.
@@ -227,7 +230,7 @@ def make_intermediate_file_names(tmpdir: str, cds_requests: list[dict[str, any]]
 
 
 def download_era5_data(
-    variables: [str],
+    variables: list[str],
     year: int,
     latitude: float,
     longitude: float,
