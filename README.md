@@ -48,7 +48,8 @@ The API key doesn't vary, it's the same for both ERA5 and CAMS data.
 
 If you want to use the [Earth Data Hub](https://earthdatahub.destine.eu/) (EDH) as a data source instead of CDS, you need to set up your EDH personal access token.
 
-> **Note:** Earth Data Hub has a monthly quota of 500,000 requests per user. Data is available until the last closed month.
+> [!NOTE]
+> Earth Data Hub has a monthly quota of 500,000 requests per user. Data is available until the last closed month.
 
 #### Passing the token as environment variable
 
