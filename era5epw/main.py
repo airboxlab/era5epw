@@ -9,6 +9,7 @@ from tqdm.auto import tqdm
 
 from era5epw.ads import download_cams_solar_radiation_data
 from era5epw.cds import download_era5_data
+from era5epw.edh import download_era5_data_edh
 
 
 def get_first_weekday_of_year(y: int) -> str:
@@ -85,6 +86,13 @@ def create_args() -> ArgumentParser:
         help="Output file path for the generated EPW file.",
     )
     parser.add_argument(
+        "--era5-data-source",
+        type=str,
+        default="cds",
+        choices=["cds", "edh"],
+        help="Data source for ERA5 data: 'cds' (Climate Data Store, default) or 'edh' (Earth Data Hub).",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable verbose logging from CDS client.",
@@ -108,6 +116,7 @@ def download_and_make_epw(
     parallel_exec_nb: int = 10,
     verbose: bool = False,
     apply_time_zone_to_data: bool = False,
+    era5_data_source: str = "cds",
 ) -> None:
     """Generate a full year EPW file from ERA5 and CAMS data.
 
@@ -122,6 +131,8 @@ def download_and_make_epw(
         minute).
     :param verbose: If True, enable verbose logging from CDS client.
     :param apply_time_zone_to_data: If True, apply time zone offset to data timestamps.
+    :param era5_data_source: Data source for ERA5 data: 'cds' (Climate Data Store) or 'edh'
+        (Earth Data Hub).
     """
     start_time = datetime.now()
 
@@ -149,27 +160,39 @@ def download_and_make_epw(
     overall_progress.update(1)  # CAMS download completed
 
     overall_progress.set_description("Downloading ERA5 data")
-    era5_df = download_era5_data(
-        variables=[
-            "2m_temperature",
-            "2m_dewpoint_temperature",
-            "surface_pressure",
-            "10m_u_component_of_wind",
-            "10m_v_component_of_wind",
-            "total_cloud_cover",
-            "uv_visible_albedo_for_direct_radiation",
-            "snow_depth",
-            "soil_temperature_level_1",
-            "total_precipitation",
-        ],
-        year=year,
-        latitude=latitude,
-        longitude=longitude,
-        parallel_exec_nb=parallel_exec_nb,
-        dataset=None,  # dynamic dataset selection based on variables
-        verbose=verbose,
-        time_zone=time_zone if apply_time_zone_to_data else None,
-    )
+    era5_variables = [
+        "2m_temperature",
+        "2m_dewpoint_temperature",
+        "surface_pressure",
+        "10m_u_component_of_wind",
+        "10m_v_component_of_wind",
+        "total_cloud_cover",
+        "uv_visible_albedo_for_direct_radiation",
+        "snow_depth",
+        "soil_temperature_level_1",
+        "total_precipitation",
+    ]
+
+    if era5_data_source == "edh":
+        era5_df = download_era5_data_edh(
+            variables=era5_variables,
+            year=year,
+            latitude=latitude,
+            longitude=longitude,
+            parallel_exec_nb=parallel_exec_nb,
+            time_zone=time_zone if apply_time_zone_to_data else None,
+        )
+    else:
+        era5_df = download_era5_data(
+            variables=era5_variables,
+            year=year,
+            latitude=latitude,
+            longitude=longitude,
+            parallel_exec_nb=parallel_exec_nb,
+            dataset=None,  # dynamic dataset selection based on variables
+            verbose=verbose,
+            time_zone=time_zone if apply_time_zone_to_data else None,
+        )
     overall_progress.update(1)  # ERA5 download completed
     overall_progress.close()
 
@@ -199,7 +222,10 @@ def download_and_make_epw(
     v10 = era5_df["v10"].values  # m/s
     cloud = era5_df["tcc"].values * 10  # Fraction to okta (0-10 scale)
     uv_visible_albedo = era5_df["aluvp"].values  # (0-1 scale)
-    snow_depth = era5_df["sd"].values * 100  # m to cm
+    # 'sde' variable name is used in ERA5-Land, in ERA5 it's 'sd'.
+    if "sde" in era5_df.columns and "sde" not in era5_df.columns:
+        era5_df["sd"] = era5_df["sde"]
+    snow_depth = era5_df["sde"].values * 100  # m to cm.
     total_precipitation = era5_df["tp"].values * 1000  # m to mm
     ghi = cams_df["GHI"].values  # Global horizontal all sky irradiation in Wh/m^2
     bni = cams_df["BNI"].values  # Direct normal all sky irradiation in Wh/m^2
@@ -314,6 +340,7 @@ def download():
         parallel_exec_nb=args.parallel_requests,
         verbose=args.verbose,
         apply_time_zone_to_data=args.apply_time_zone_to_data,
+        era5_data_source=args.era5_data_source,
     )
 
 

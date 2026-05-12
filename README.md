@@ -21,7 +21,9 @@ Make sure to register for an API key and validate licences at:
 
 Before proceeding further, it is required to accept all the licenses in the section "Your profile" in the website of [Copernicus](https://cds.climate.copernicus.eu/profile?tab=licences).
 
-### Passing the key as environment variable
+### CDS/ADS credentials
+
+#### Passing the key as environment variable
 
 This is the easiest method. Use:
 
@@ -30,7 +32,7 @@ import os
 os.environ["CDSADS_API_KEY"] = "YOUR_KEY"
 ```
 
-### Installing the API key in your filesytem
+#### Installing the API key in your filesytem
 
 Then create the file `~/.cdsapirc` with the following content:
 
@@ -41,6 +43,33 @@ key: <your_api_key>
 
 Note: the URL will be dynamically managed by the script depending on the data source.
 The API key doesn't vary, it's the same for both ERA5 and CAMS data.
+
+### Earth Data Hub credentials (optional)
+
+If you want to use the [Earth Data Hub](https://earthdatahub.destine.eu/) (EDH) as a data source instead of CDS, you need to set up your EDH personal access token.
+
+> **Note:** Earth Data Hub has a monthly quota of 500,000 requests per user. Data is available until the last closed month.
+
+#### Passing the token as environment variable
+
+```python
+import os
+os.environ["EDH_TOKEN"] = "edh_pat_..."
+```
+
+Or in the shell:
+
+```bash
+export EDH_TOKEN="edh_pat_..."
+```
+
+#### Installing the token in your filesystem
+
+Create the file `~/.edh_token` with your personal access token (plain text, first line):
+
+```
+edh_pat_...
+```
 
 ## Install the package
 
@@ -61,7 +90,7 @@ poetry install
 
 # Usage
 
-> \[!NOTE\]
+> [!NOTE]
 > When running in a Jupyter notebook, to make progress bars and interactive widgets work, make sure to install `ipywidgets` and to enable the widgets extension.
 
 ```bash
@@ -82,6 +111,9 @@ poetry run era5epw_download --year 2024 --latitude 49.4 --longitude 0.1 --city-n
 
 # using installed binary, after pypi package installation
 era5epw_download --year 2024 --latitude 49.4 --longitude 0.1 --city-name "Le Havre" --elevation 0 --time-zone 1
+
+# using Earth Data Hub as data source (faster downloads, requires EDH token)
+era5epw_download --year 2024 --latitude 49.4 --longitude 0.1 --city-name "Le Havre" --elevation 0 --time-zone 1 --era5-data-source edh
 ```
 
 By default, the `time-zone` argument is used only to populate the `LOCATION` header and data time is UTC. Use `--apply-time-zone-to-data` to apply it to the date and time fields (this will shift the UTC time by the provided time zone offset).
@@ -105,6 +137,42 @@ download_and_make_epw(
     output_file="/tmp/era5epw_paris_2025.epw",
     apply_time_zone_to_data=True,
 )
+
+# Or using Earth Data Hub as data source (faster downloads):
+download_and_make_epw(
+    year=2025,
+    latitude=48.8,
+    longitude=2.4,
+    city_name="Paris",
+    time_zone=1,
+    elevation=0,
+    output_file="/tmp/era5epw_paris_2025.epw",
+    apply_time_zone_to_data=True,
+    era5_data_source="edh",
+)
+```
+
+## Reading EPW Files into a DataFrame
+
+The package provides a reader to load EPW files into Pandas DataFrames for inspection, data analysis, and further processing.
+
+### Python API
+
+```python
+from era5epw.reader import read_epw_file
+
+# Load EPW file into a DataFrame
+df = read_epw_file("path/to/file.epw")
+
+# Inspect the data
+print(df.head())
+print(df.describe())
+
+# Access specific weather series
+print(df["Dry Bulb Temperature"].mean())
+
+# Filter by date
+january_data = df[df.index.month == 1]
 ```
 
 ## Visualizing EPW Files
@@ -180,6 +248,7 @@ Datasets home pages:
 - [ERA5 Land hourly time-series data from 1950 to present](https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land-timeseries) (Experimental)
 - [ERA5 hourly data on single levels from 1940 to present](https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels)
 - [CAMS solar radiation time-series](https://ads.atmosphere.copernicus.eu/datasets/cams-solar-radiation-timeseries)
+- [Earth Data Hub - ERA5 reanalysis single levels](https://earthdatahub.destine.eu/collections/era5/datasets/reanalysis-era5-single-levels) (License: [Copernicus License](https://earthdatahub.destine.eu/collections/era5/datasets/reanalysis-era5-single-levels))
 
 View your API requests and download responses at:
 

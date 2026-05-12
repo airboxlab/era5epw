@@ -1,4 +1,5 @@
 import tempfile
+from typing import Any
 
 import pandas as pd
 import xarray as xr
@@ -19,7 +20,7 @@ def make_cams_solar_radiation_request(
     time_step: str = "1hour",
     time_reference: str = "universal_time",
     time_zone: int | None = None,
-) -> dict[str, any] | None:
+) -> dict[str, Any] | None:
     assert sky_type in [
         "clear",
         "observed_cloud",
