@@ -8,6 +8,7 @@ from era5epw.main import (
     calc_rh,
     get_first_weekday_of_year,
     make_data_period_end_date,
+    make_ground_temperatures_string,
 )
 
 
@@ -25,6 +26,34 @@ class TestEpwGeneration(unittest.TestCase):
         self.assertTrue((monthly_avg >= 0).all())
         self.assertTrue((monthly_avg <= 10).all())
         print(",".join(monthly_avg.round(1).astype(str).tolist()))
+
+    def test_make_ground_temperatures_string_full_year(self):
+        # Create a sample DataFrame with soil temperature data
+        dates = pd.date_range(start="2023-01-01", end="2023-12-31", freq="D")
+        soil_temp = pd.Series([260 + i % 30 for i in range(len(dates))], index=dates)
+
+        # Compute monthly average soil temperature
+        monthly_avg = calc_monthly_soil_temperature(soil_temp)
+
+        # Create the ground temperatures string
+        ground_temps_str = make_ground_temperatures_string(monthly_avg)
+
+        self.assertEqual(
+            ground_temps_str, "1,3.5,,,," + ",".join(monthly_avg.round(1).astype(str).tolist())
+        )
+
+    def test_make_ground_temperatures_string_partial_year(self):
+        # Create a sample DataFrame with soil temperature data for a partial year
+        dates = pd.date_range(start="2023-01-01", end="2023-06-30", freq="D")
+        soil_temp = pd.Series([260 + i % 30 for i in range(len(dates))], index=dates)
+
+        # Compute monthly average soil temperature
+        monthly_avg = calc_monthly_soil_temperature(soil_temp)
+
+        # Create the ground temperatures string
+        ground_temps_str = make_ground_temperatures_string(monthly_avg)
+
+        self.assertEqual(ground_temps_str, "0")
 
     def test_calc_rh(self):
         # Sample dry bulb and dew point temperatures

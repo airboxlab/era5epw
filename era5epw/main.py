@@ -53,6 +53,29 @@ def make_data_period_end_date(df: pd.DataFrame) -> str:
     return df.iloc[-1][["Month", "Day"]].astype(int).astype(str).str.cat(sep="/")
 
 
+def make_ground_temperatures_string(soil_temp: pd.Series) -> str:
+    """Create the ground temperatures string for the EPW header.
+
+    :param soil_temp: Series containing monthly average soil temperature in Celsius.
+    :return: Ground temperatures string for the EPW header.
+    """
+    if len(soil_temp) != 12:
+        logging.warning(
+            "Unexpected number of monthly soil temperatures (should be 12). "
+            "Setting number of monthly soil temperatures to 0."
+        )
+        return "0"
+    else:
+        ground_temps = "1,3.5,,,," + ",".join(soil_temp.round(1).astype(str).tolist())
+        if "nan" in ground_temps:
+            logging.warning(
+                "Soil temperature data at level 1 (0-7 cm) contains NaN values. "
+                "Setting number of monthly soil temperatures to 0."
+            )
+            return "0"
+        return ground_temps
+
+
 def create_args() -> ArgumentParser:
     """Create argument parser for command line arguments."""
     import argparse
@@ -281,16 +304,7 @@ def download_and_make_epw(
         }
     )
 
-    ground_temps = "1,3.5,,,," + ",".join(
-        calc_monthly_soil_temperature(era5_df["stl1"]).round(1).astype(str).tolist()
-    )
-    if "nan" in ground_temps:
-        logging.warning(
-            "Soil temperature data at level 1 (0-7 cm) contains NaN values. "
-            "Setting number of monthly soil temperatures to 0."
-        )
-        ground_temps = "0"
-
+    ground_temps = make_ground_temperatures_string(calc_monthly_soil_temperature(era5_df["stl1"]))
     data_period_end_date = make_data_period_end_date(df)
 
     # Write header
