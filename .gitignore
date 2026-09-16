@@ -9,3 +9,4 @@ requirements.txt
 **/.ipynb_checkpoints/
 **/.jupyter_ystore.db
 .poetry-version
+node_modules
