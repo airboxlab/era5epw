@@ -94,7 +94,6 @@ def make_cds_days_list(year, month) -> list[str]:
     :param month: The month for which to generate the days.
     :return: A list of days in the format 'DD' for the specified month and year.
     """
-
     now = now_utc()
     current_year, current_month, current_day = now.year, now.month, now.day
 
@@ -138,7 +137,6 @@ def unzip_and_load_netcdf_to_df(file_path: str, clean_up: bool) -> pd.DataFrame:
     :param clean_up: If True, remove the temporary NetCDF file after processing.
     :return: A DataFrame containing the data from the NetCDF file.
     """
-
     if zipfile.is_zipfile(file_path):
         with zipfile.ZipFile(file_path, "r") as zip_ref:
             nc_file = zip_ref.namelist()[0]
@@ -183,8 +181,9 @@ def concat_netcdf_files_to_df(file_paths, time_dim: int = 0) -> pd.DataFrame:
 
 
 def generate_download_link(file_path: str, link_text: str = "Download file"):
-    """Generate a download link for a file. Useful for Jupyter notebooks to allow users to download
-    files generated in the notebook.
+    """Generate a download link for a file.
+
+    Useful for Jupyter notebooks to allow users to download files generated in the notebook.
 
     :param file_path: Path to the file to be downloaded.
     :param link_text: Text to be displayed for the download link.

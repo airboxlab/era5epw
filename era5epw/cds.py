@@ -63,7 +63,6 @@ def make_cds_request(
     :return: A dictionary representing the CDS request if the request is valid, otherwise
         None.
     """
-
     now = now_utc()
 
     # compute the start and end months.
