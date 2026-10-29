@@ -178,7 +178,11 @@ january_data = df[df.index.month == 1]
 
 ## Visualizing EPW Files
 
-The package includes an interactive visualization tool for EPW files that supports three types of plots: 2D line charts, 3D surface plots, and radar (polar) plots.
+The package includes an interactive visualization tool for EPW files that supports four types of plots: 2D line charts, 3D surface plots, radar (polar) plots, and psychrometric charts.
+
+The psychrometric chart shows each hourly record of the year as a point (outdoor dry bulb temperature vs. humidity ratio), colored by day of year.
+Saturation, relative humidity, enthalpy and dew point curves are drawn in distinct colors and can be toggled by clicking their legend entry.
+Hovering a point displays all measured and calculated values (dew point, relative humidity, pressure, humidity ratio, enthalpy, wet bulb temperature, vapor pressure, specific volume) with units.
 
 ### Command line interface
 
@@ -194,6 +198,10 @@ era5epw_visualize path/to/file.epw --series "Wind Speed" --type 3D
 
 # Create a radar plot showing daily min/max values
 era5epw_visualize path/to/file.epw --series "Global Horizontal Radiation" --type radar
+
+# Create a psychrometric chart, with enthalpy and dew point curves initially shown
+# (relative humidity curves are shown by default, use --no-relative-humidity to hide them)
+era5epw_visualize path/to/file.epw --type psychrometric --enthalpy --dew-point
 
 # Save visualization to HTML file
 era5epw_visualize path/to/file.epw --series "Dry Bulb Temperature" --output visualization.html
@@ -227,6 +235,16 @@ fig = visualize_epw(
     epw_file_path="path/to/file.epw",
     series_name="Global Horizontal Radiation",
     plot_type="radar",
+    show=True
+)
+
+# Create psychrometric chart
+fig = visualize_epw(
+    epw_file_path="path/to/file.epw",
+    plot_type="psychrometric",
+    show_relative_humidity=True,
+    show_enthalpy=True,
+    show_dew_point=False,
     show=True
 )
 
