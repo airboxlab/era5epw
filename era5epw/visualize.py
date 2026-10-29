@@ -8,9 +8,20 @@ import argparse
 from pathlib import Path
 from typing import Literal
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
+from era5epw.psychrometrics import (
+    humidity_ratio_from_enthalpy,
+    humidity_ratio_from_vapor_pressure,
+    moist_air_enthalpy,
+    moist_air_specific_volume,
+    saturation_humidity_ratio,
+    saturation_temperature_from_enthalpy,
+    vapor_pressure_from_relative_humidity,
+    wet_bulb_temperature,
+)
 from era5epw.reader import read_epw_file
 
 # Series to hide from the dropdown menu
@@ -55,6 +66,23 @@ UNITS = {
     "Liquid Precipitation Depth": "mm",
     "Liquid Precipitation Quantity": "hr",
 }
+
+# Psychrometric chart curve colors
+PSYCHROMETRIC_COLORS = {
+    "saturation": "#212529",
+    "relative_humidity": "#1f77b4",
+    "enthalpy": "#ff7f0e",
+    "dew_point": "#e377c2",
+}
+
+# Cyclic seasonal color scale for the day of year: winter, spring, summer, autumn, winter
+SEASONAL_COLORSCALE = [
+    [0.0, "#08306b"],
+    [0.25, "#31a354"],
+    [0.5, "#e6550d"],
+    [0.75, "#c9a227"],
+    [1.0, "#08306b"],
+]
 
 
 def get_visible_series(df: pd.DataFrame) -> list[str]:
@@ -305,21 +333,362 @@ def create_radar_plot(
     return fig
 
 
+def compute_psychrometric_states(df: pd.DataFrame) -> pd.DataFrame:
+    """Compute the psychrometric state of outdoor air for each valid EPW record.
+
+    Records with missing (out of range) dry bulb temperature, dew point temperature,
+    relative humidity or station pressure are dropped.
+
+    :param df: DataFrame containing weather data.
+    :return: DataFrame with measured and calculated psychrometric values (humidity ratio in
+        kg/kg dry air, enthalpy in kJ/kg dry air, vapor pressure in Pa, specific volume in
+        m³/kg dry air, wet bulb temperature in °C).
+    """
+    t = df["Dry Bulb Temperature"]
+    td = df["Dew Point Temperature"]
+    rh = df["Relative Humidity"]
+    p = df["Atmospheric Station Pressure"]
+
+    # EPW missing values are out of the valid ranges
+    valid = (
+        t.between(-70, 70, inclusive="neither")
+        & td.between(-70, 70, inclusive="neither")
+        & rh.between(0, 110)
+        & p.between(31000, 120000, inclusive="neither")
+    )
+    states = df.loc[
+        valid,
+        [
+            "Dry Bulb Temperature",
+            "Dew Point Temperature",
+            "Relative Humidity",
+            "Atmospheric Station Pressure",
+        ],
+    ].copy()
+
+    t, rh, p = (
+        states["Dry Bulb Temperature"].to_numpy(dtype=float),
+        states["Relative Humidity"].to_numpy(dtype=float),
+        states["Atmospheric Station Pressure"].to_numpy(dtype=float),
+    )
+    pw = vapor_pressure_from_relative_humidity(t, rh)
+    w = humidity_ratio_from_vapor_pressure(pw, p)
+    states["Humidity Ratio"] = w
+    states["Enthalpy"] = moist_air_enthalpy(t, w)
+    states["Wet Bulb Temperature"] = wet_bulb_temperature(t, w, p)
+    states["Vapor Pressure"] = pw
+    states["Specific Volume"] = moist_air_specific_volume(t, w, p)
+
+    return states
+
+
+def _psychrometric_curve(
+    x: np.ndarray,
+    y: np.ndarray,
+    name: str,
+    color: str,
+    label: str,
+    label_index: int,
+    text_position: str,
+    legend_group: str,
+    show_legend: bool,
+    visible: bool,
+    dash: str = "solid",
+    width: float = 1,
+) -> go.Scatter:
+    """Create a labeled psychrometric chart curve.
+
+    :param x: Dry bulb temperatures (°C).
+    :param y: Humidity ratios (g/kg dry air).
+    :param name: Name of the curve family, displayed in the legend.
+    :param color: Color of the curve and its label.
+    :param label: Label of the curve, displayed at `label_index`.
+    :param label_index: Index of the curve point where the label is displayed.
+    :param text_position: Position of the label relative to the curve point.
+    :param legend_group: Legend group of the curve family, to toggle all its curves at once.
+    :param show_legend: Whether to display the curve in the legend.
+    :param visible: Whether the curve is visible, or only displayed in the legend.
+    :param dash: Dash style of the curve.
+    :param width: Width of the curve.
+    :return: Plotly Scatter trace.
+    """
+    return go.Scatter(
+        x=x,
+        y=y,
+        mode="lines+text",
+        name=name,
+        legendgroup=legend_group,
+        showlegend=show_legend,
+        visible=True if visible else "legendonly",
+        line=dict(color=color, width=width, dash=dash),
+        text=[label if i == label_index else "" for i in range(len(x))],
+        textposition=text_position,
+        textfont=dict(color=color, size=10),
+        hoverinfo="skip",
+        cliponaxis=False,
+    )
+
+
+def create_psychrometric_plot(
+    df: pd.DataFrame,
+    show_relative_humidity: bool = True,
+    show_enthalpy: bool = False,
+    show_dew_point: bool = False,
+    width: int = 1200,
+    height: int = 750,
+) -> go.Figure:
+    """Create a psychrometric chart showing each hourly record of the year.
+
+    Each record is displayed as a point (dry bulb temperature, humidity ratio), colored by
+    its day of the year. Relative humidity, enthalpy and dew point curves are drawn at the
+    median station pressure, each family with its own color. Curve families can be toggled
+    by clicking on their legend entry.
+
+    :param df: DataFrame containing weather data.
+    :param show_relative_humidity: Whether relative humidity curves are initially visible.
+    :param show_enthalpy: Whether enthalpy curves are initially visible.
+    :param show_dew_point: Whether dew point curves are initially visible.
+    :param width: Width of the plot in pixels.
+    :param height: Height of the plot in pixels.
+    :return: Plotly Figure object.
+    """
+    states = compute_psychrometric_states(df)
+    if states.empty:
+        raise ValueError(
+            "No valid dry bulb temperature, dew point temperature, relative humidity and "
+            "station pressure records found to create a psychrometric chart."
+        )
+
+    t = states["Dry Bulb Temperature"].to_numpy()
+    w = states["Humidity Ratio"].to_numpy() * 1000
+    pressure = float(states["Atmospheric Station Pressure"].median())
+
+    # chart ranges
+    t_min = 5 * np.floor((t.min() - 2) / 5)
+    t_max = 5 * np.ceil((t.max() + 2) / 5)
+    w_max = float(np.ceil(max(w.max(), 1.0) * 1.15))
+    t_grid = np.linspace(t_min, t_max, 200)
+
+    fig = go.Figure()
+
+    # saturation curve
+    w_sat = saturation_humidity_ratio(t_grid, pressure) * 1000
+    in_range = w_sat <= w_max
+    fig.add_trace(
+        _psychrometric_curve(
+            t_grid[in_range],
+            w_sat[in_range],
+            name="Saturation",
+            color=PSYCHROMETRIC_COLORS["saturation"],
+            label="100%",
+            label_index=int(in_range.sum()) - 1,
+            text_position="top left",
+            legend_group="saturation",
+            show_legend=True,
+            visible=True,
+            width=2,
+        )
+    )
+
+    # relative humidity curves
+    first = True
+    for rh in range(10, 100, 10):
+        w_rh = (
+            humidity_ratio_from_vapor_pressure(
+                vapor_pressure_from_relative_humidity(t_grid, rh), pressure
+            )
+            * 1000
+        )
+        in_range = w_rh <= w_max
+        if in_range.sum() < 2:
+            continue
+        fig.add_trace(
+            _psychrometric_curve(
+                t_grid[in_range],
+                w_rh[in_range],
+                name="Relative Humidity (%)",
+                color=PSYCHROMETRIC_COLORS["relative_humidity"],
+                label=f"{rh}%",
+                label_index=int(in_range.sum()) - 1,
+                text_position="top left",
+                legend_group="relative_humidity",
+                show_legend=first,
+                visible=show_relative_humidity,
+            )
+        )
+        first = False
+
+    # enthalpy curves, from the saturation curve (or chart edges) to zero humidity ratio
+    w_corner = min(w_max, float(saturation_humidity_ratio(t_max, pressure)) * 1000)
+    h_low = 1.006 * t_min
+    h_high = float(moist_air_enthalpy(t_max, w_corner / 1000))
+    first = True
+    for h in np.arange(10 * np.ceil(h_low / 10), h_high, 10):
+        t_start = max(float(saturation_temperature_from_enthalpy(h, pressure)), t_min)
+        t_end = min(h / 1.006, t_max)
+        if t_start >= t_end:
+            continue
+        t_h = np.linspace(t_start, t_end, 50)
+        w_h = humidity_ratio_from_enthalpy(h, t_h) * 1000
+        in_range = (w_h <= w_max) & (w_h >= 0)
+        if in_range.sum() < 2:
+            continue
+        fig.add_trace(
+            _psychrometric_curve(
+                t_h[in_range],
+                w_h[in_range],
+                name="Enthalpy (kJ/kg)",
+                color=PSYCHROMETRIC_COLORS["enthalpy"],
+                label=f"{h + 0.0:g} kJ/kg",
+                label_index=0,
+                text_position="top left",
+                legend_group="enthalpy",
+                show_legend=first,
+                visible=show_enthalpy,
+                dash="dot",
+            )
+        )
+        first = False
+
+    # dew point curves: constant humidity ratio, from the saturation curve to the right edge
+    first = True
+    for td in np.arange(5 * np.ceil(t_min / 5), t_max, 5):
+        w_td = float(saturation_humidity_ratio(td, pressure)) * 1000
+        if w_td > w_max:
+            continue
+        fig.add_trace(
+            _psychrometric_curve(
+                np.array([td, t_max]),
+                np.array([w_td, w_td]),
+                name="Dew Point (°C)",
+                color=PSYCHROMETRIC_COLORS["dew_point"],
+                label=f"{td + 0.0:g}°C",
+                label_index=0,
+                text_position="middle left",
+                legend_group="dew_point",
+                show_legend=first,
+                visible=show_dew_point,
+                dash="dash",
+            )
+        )
+        first = False
+
+    # hourly records, colored by day of year
+    index = pd.DatetimeIndex(states.index)
+    day_of_year = (index.dayofyear - 1 + index.hour / 24).to_numpy()
+    month_starts = pd.date_range(start=f"{index[0].year}-01-01", periods=12, freq="MS")
+    customdata = np.column_stack(
+        [
+            index.strftime("%Y-%m-%d %H:%M"),
+            states["Dew Point Temperature"].to_numpy(),
+            states["Relative Humidity"].to_numpy(),
+            states["Atmospheric Station Pressure"].to_numpy(),
+            states["Enthalpy"].to_numpy(),
+            states["Wet Bulb Temperature"].to_numpy(),
+            states["Vapor Pressure"].to_numpy(),
+            states["Specific Volume"].to_numpy(),
+        ]
+    ).astype(object)
+    fig.add_trace(
+        go.Scattergl(
+            x=t,
+            y=w,
+            mode="markers",
+            name="Hourly records",
+            showlegend=False,
+            marker=dict(
+                size=5,
+                opacity=0.8,
+                color=day_of_year,
+                colorscale=SEASONAL_COLORSCALE,
+                cmin=0,
+                cmax=366,
+                colorbar=dict(
+                    title="Month",
+                    tickvals=(month_starts.dayofyear - 1).tolist(),
+                    ticktext=month_starts.strftime("%b").tolist(),
+                    len=0.75,
+                ),
+            ),
+            customdata=customdata,
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br>"
+                "Dry Bulb Temperature: %{x:.1f} °C<br>"
+                "Dew Point Temperature: %{customdata[1]:.1f} °C<br>"
+                "Relative Humidity: %{customdata[2]:.0f} %<br>"
+                "Atmospheric Station Pressure: %{customdata[3]:.0f} Pa<br>"
+                "Humidity Ratio: %{y:.2f} g/kg<br>"
+                "Enthalpy: %{customdata[4]:.1f} kJ/kg<br>"
+                "Wet Bulb Temperature: %{customdata[5]:.1f} °C<br>"
+                "Vapor Pressure: %{customdata[6]:.0f} Pa<br>"
+                "Specific Volume: %{customdata[7]:.3f} m³/kg"
+                "<extra></extra>"
+            ),
+        )
+    )
+
+    fig.update_layout(
+        title=dict(
+            text=f"Psychrometric Chart (curves at {pressure / 1000:.1f} kPa)",
+            font=dict(size=16),
+        ),
+        xaxis=dict(
+            title="Dry Bulb Temperature (°C)",
+            range=[t_min, t_max],
+            dtick=5,
+            showgrid=False,
+            zeroline=False,
+        ),
+        yaxis=dict(
+            title="Humidity Ratio (g/kg dry air)",
+            range=[0, w_max],
+            showgrid=False,
+            zeroline=False,
+        ),
+        legend=dict(
+            title=dict(text="Curves (click to toggle):"),
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="left",
+            x=0,
+        ),
+        plot_bgcolor="white",
+        hovermode="closest",
+        hoverlabel=dict(bgcolor="white", font=dict(size=13)),
+        width=width,
+        height=height,
+        margin=dict(t=100, r=20, b=60, l=60),
+    )
+
+    return fig
+
+
 def visualize_epw(
     epw_file_path: str,
     series_name: str = "Dry Bulb Temperature",
-    plot_type: Literal["2D", "3D", "radar"] = "2D",
+    plot_type: Literal["2D", "3D", "radar", "psychrometric"] = "2D",
     show: bool = True,
     renderer: Literal["notebook", "browser", "iframe"] = "notebook",
+    show_relative_humidity: bool = True,
+    show_enthalpy: bool = False,
+    show_dew_point: bool = False,
 ) -> go.Figure:
     """Visualize EPW weather data with interactive plots.
 
     :param epw_file_path: Path to the EPW file.
-    :param series_name: Name of the weather series to visualize.
-    :param plot_type: Type of plot: "2D", "3D", or "radar".
+    :param series_name: Name of the weather series to visualize (ignored for psychrometric
+        charts).
+    :param plot_type: Type of plot: "2D", "3D", "radar" or "psychrometric".
     :param show: If True, display the plot immediately (useful in Jupyter).
     :param renderer: Renderer to use for displaying the plot ("notebook", "browser", or
         "iframe").
+    :param show_relative_humidity: Psychrometric chart only, whether relative humidity
+        curves are initially visible.
+    :param show_enthalpy: Psychrometric chart only, whether enthalpy curves are initially
+        visible.
+    :param show_dew_point: Psychrometric chart only, whether dew point curves are initially
+        visible.
     :return: Plotly Figure object.
     """
     # Read EPW file
@@ -339,8 +708,17 @@ def visualize_epw(
         fig = create_3d_plot(df, series_name)
     elif plot_type == "radar":
         fig = create_radar_plot(df, series_name)
+    elif plot_type == "psychrometric":
+        fig = create_psychrometric_plot(
+            df,
+            show_relative_humidity=show_relative_humidity,
+            show_enthalpy=show_enthalpy,
+            show_dew_point=show_dew_point,
+        )
     else:
-        raise ValueError(f"Invalid plot_type: {plot_type}. Must be '2D', '3D', or 'radar'.")
+        raise ValueError(
+            f"Invalid plot_type: {plot_type}. Must be '2D', '3D', 'radar' or 'psychrometric'."
+        )
 
     if show:
         fig.show(renderer=renderer)
@@ -367,9 +745,30 @@ def visualize_cli() -> None:
     parser.add_argument(
         "--type",
         type=str,
-        choices=["2D", "3D", "radar"],
+        choices=["2D", "3D", "radar", "psychrometric"],
         default="2D",
-        help="Type of visualization: 2D (line plot), 3D (surface plot), or radar (polar plot).",
+        help=(
+            "Type of visualization: 2D (line plot), 3D (surface plot), radar (polar plot), or "
+            "psychrometric (psychrometric chart of all hourly records, --series is ignored)."
+        ),
+    )
+    parser.add_argument(
+        "--relative-humidity",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Psychrometric chart: show relative humidity curves (default: shown).",
+    )
+    parser.add_argument(
+        "--enthalpy",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Psychrometric chart: show enthalpy curves (default: hidden).",
+    )
+    parser.add_argument(
+        "--dew-point",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Psychrometric chart: show dew point curves (default: hidden).",
     )
     parser.add_argument(
         "--output",
@@ -406,6 +805,9 @@ def visualize_cli() -> None:
             series_name=args.series,
             plot_type=args.type,
             show=False,
+            show_relative_humidity=args.relative_humidity,
+            show_enthalpy=args.enthalpy,
+            show_dew_point=args.dew_point,
         )
 
         if args.output:

@@ -7,8 +7,11 @@ import unittest
 import pandas as pd
 
 from era5epw.visualize import (
+    PSYCHROMETRIC_COLORS,
+    compute_psychrometric_states,
     create_2d_plot,
     create_3d_plot,
+    create_psychrometric_plot,
     create_radar_plot,
     get_visible_series,
     read_epw_file,
@@ -146,6 +149,82 @@ class TestEPWVisualization(unittest.TestCase):
         fig = visualize_epw(self.test_epw_path, plot_type="radar", show=False)
         self.assertIsNotNone(fig)
         self.assertTrue(len(fig.data) > 0)
+
+    def test_compute_psychrometric_states(self):
+        """Test computing psychrometric states, dropping missing values."""
+        df = read_epw_file(self.test_epw_path)
+        df.loc[df.index[0], "Relative Humidity"] = 999
+        df.loc[df.index[1], "Atmospheric Station Pressure"] = 999999
+        states = compute_psychrometric_states(df)
+
+        self.assertEqual(len(states), 46)
+        for column in [
+            "Humidity Ratio",
+            "Enthalpy",
+            "Wet Bulb Temperature",
+            "Vapor Pressure",
+            "Specific Volume",
+        ]:
+            self.assertIn(column, states.columns)
+            self.assertFalse(states[column].isna().any())
+        self.assertTrue((states["Humidity Ratio"] > 0).all())
+        self.assertTrue((states["Wet Bulb Temperature"] <= states["Dry Bulb Temperature"]).all())
+
+    def test_create_psychrometric_plot(self):
+        """Test creating a psychrometric chart."""
+        df = read_epw_file(self.test_epw_path)
+        fig = create_psychrometric_plot(df)
+
+        # points are the last trace, one per hourly record, colored by day of year
+        points = fig.data[-1]
+        self.assertEqual(points.type, "scattergl")
+        self.assertEqual(len(points.x), 48)
+        self.assertEqual(len(points.marker.color), 48)
+        self.assertEqual(len(points.customdata), 48)
+        for unit in ["°C", "%", "Pa", "g/kg", "kJ/kg", "m³/kg"]:
+            self.assertIn(unit, points.hovertemplate)
+
+        # curve families: each with its own color and a single legend entry
+        groups = {}
+        for trace in fig.data[:-1]:
+            groups.setdefault(trace.legendgroup, []).append(trace)
+        self.assertEqual(set(groups), {"saturation", "relative_humidity", "enthalpy", "dew_point"})
+        for group, traces in groups.items():
+            self.assertEqual(sum(bool(t.showlegend) for t in traces), 1)
+            self.assertTrue(all(t.line.color == PSYCHROMETRIC_COLORS[group] for t in traces))
+
+        # default visibility: relative humidity shown, enthalpy and dew point toggled off
+        self.assertTrue(all(t.visible is True for t in groups["saturation"]))
+        self.assertTrue(all(t.visible is True for t in groups["relative_humidity"]))
+        self.assertTrue(all(t.visible == "legendonly" for t in groups["enthalpy"]))
+        self.assertTrue(all(t.visible == "legendonly" for t in groups["dew_point"]))
+
+    def test_create_psychrometric_plot_toggles(self):
+        """Test psychrometric chart curves initial visibility options."""
+        df = read_epw_file(self.test_epw_path)
+        fig = create_psychrometric_plot(
+            df, show_relative_humidity=False, show_enthalpy=True, show_dew_point=True
+        )
+        visibility = {trace.legendgroup: trace.visible for trace in fig.data if trace.legendgroup}
+        self.assertEqual(visibility["relative_humidity"], "legendonly")
+        self.assertIs(visibility["enthalpy"], True)
+        self.assertIs(visibility["dew_point"], True)
+
+    def test_create_psychrometric_plot_no_valid_data(self):
+        """Test that a psychrometric chart without valid records raises ValueError."""
+        df = read_epw_file(self.test_epw_path)
+        df["Relative Humidity"] = 999
+        with self.assertRaises(ValueError):
+            create_psychrometric_plot(df)
+
+    def test_visualize_epw_psychrometric(self):
+        """Test the main visualize_epw function with psychrometric chart."""
+        fig = visualize_epw(
+            self.test_epw_path, plot_type="psychrometric", show=False, show_enthalpy=True
+        )
+        self.assertIsNotNone(fig)
+        self.assertEqual(fig.data[-1].type, "scattergl")
+        self.assertIn("Psychrometric", fig.layout.title.text)
 
     def test_visualize_epw_invalid_series(self):
         """Test that invalid series name raises ValueError."""
